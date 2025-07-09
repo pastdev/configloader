@@ -43,6 +43,8 @@ func (c *Config[T]) Load() error {
 
 // PersistentFlags returns a factory for adding configuration source flags to
 // the supplied root command.
+//
+//nolint:revive // want to limit what can be done to the returned object
 func (c *Config[T]) PersistentFlags(root *cobra.Command) *flags[T] {
 	return &flags[T]{
 		config: c,
