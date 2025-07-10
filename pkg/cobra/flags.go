@@ -1,4 +1,4 @@
-package config
+package cobra
 
 import (
 	"github.com/pastdev/configloader/pkg/config"
@@ -7,7 +7,7 @@ import (
 )
 
 type flags[T any] struct {
-	config *Config[T]
+	config *ConfigLoader[T]
 	root   *cobra.Command
 }
 

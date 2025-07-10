@@ -23,7 +23,7 @@ func (s FileSource[T]) Load(cfg *T) error {
 
 	err = unmarshal(b, cfg, s.Unmarshal)
 	if err != nil {
-		return fmt.Errorf("load from dir: %w", err)
+		return fmt.Errorf("load from file: %w", err)
 	}
 
 	Logger.Debug().Str("file", s.Path).Msg("loaded filesource config")

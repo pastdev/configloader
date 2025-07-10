@@ -14,7 +14,7 @@ type RawSource[T any] struct {
 func (s RawSource[T]) Load(cfg *T) error {
 	err := unmarshal(s.Data, cfg, s.Unmarshal)
 	if err != nil {
-		return fmt.Errorf("load from dir: %w", err)
+		return fmt.Errorf("load from raw: %w", err)
 	}
 
 	return nil
