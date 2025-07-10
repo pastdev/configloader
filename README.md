@@ -37,11 +37,11 @@ import(
 ## pkg/cobra
 
 The [`github.com/pastdev/pkg/cobra`](./pkg/cobra) package provides CLI integration with [cobra](https://github.com/spf13/cobra).
-There are 2 mandatory, and 2 optional integration points.
-First you need to define your [`Config`](./pkg/cobra/config.go) object:
+There is 1 mandatory, and 2 optional integration points.
+First you need to define your [`ConfigLoader`](./pkg/cobra/config.go) object:
 
 ```go
-    cfg := cobraconfig.Config[map[any]any]{
+    cfgldr := cobraconfig.ConfigLoader[map[any]any]{
         DefaultSources: config.Sources[map[any]any]{
             config.FileSource[map[any]any]{Path: "/etc/configloader.yml"},
             config.DirSource[map[any]any]{Path: "/etc/configloader.d"},
@@ -49,18 +49,6 @@ First you need to define your [`Config`](./pkg/cobra/config.go) object:
             config.DirSource[map[any]any]{Path: "~/.config/configloader.d"},
         },
     }
-```
-
-Then you need to `Load()` the configuration object in a the `PersistentPreRunE` function of your root command:
-
-```go
-        PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-            err := cfg.Load()
-            if err != nil {
-                return fmt.Errorf("load config: %w", err)
-            }
-            return nil
-        },
 ```
 
 Optionally, you can use flags to allow your user to replace the `DefaultSources`:
@@ -80,4 +68,50 @@ And add a `config` subcommand to your root command for printing out the configur
 
 ```go
     cfg.AddSubCommandTo(&root)
+```
+
+Or a use additional options when adding the subcommand:
+
+```go
+    cfgldr.AddSubCommandTo(
+        &root,
+        cobraconfig.WithConfigCommandOutput(
+            "json",
+            func(w io.Writer, cfg *map[any]any) error {
+                jsonmap := map[string]any{}
+                for k, v := range *cfg {
+                    jsonmap[fmt.Sprintf("%s", k)] = v
+                }
+
+                err := json.NewEncoder(w).Encode(jsonmap)
+                if err != nil {
+                    return fmt.Errorf("format json: %w", err)
+                }
+                return nil
+            },
+        ),
+        cobraconfig.WithConfigCommandSilenceUsage[map[any]any](true))
+```
+
+Then you can pass the the configloader object to any subcommands and simply call the `.Config()` method to load and access the config object:
+
+```go
+    root.AddCommand(fooCmd(&cfgldr))
+...
+
+func fooCmd(cfgldr *cobraconfig.ConfigLoader[map[any]any]) *cobra.Command {
+    return &cobra.Command{
+        Use:   "foo",
+        Short: `An example subcommand for how to use configloader to show the value of foo.`,
+        RunE: func(_ *cobra.Command, _ []string) error {
+            cfg, err := cfgldr.Config()
+            if err != nil {
+                return fmt.Errorf("get config: %w", err)
+            }
+
+            fmt.Printf("foo is [%s]", (*cfg)["foo"])
+            return nil
+        },
+    }
+}
 ```
