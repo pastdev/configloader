@@ -124,6 +124,9 @@ func (c *ConfigLoader[T]) AddSubCommandTo(root *cobra.Command, opts ...ConfigCom
 			"output",
 			"yaml",
 			fmt.Sprintf("Format of output, one of: %s", strings.Join(formatters, ", ")))
+	} else {
+		// no option was added, so we set output to the default formatter
+		output = "yaml"
 	}
 
 	root.AddCommand(&cmd)
