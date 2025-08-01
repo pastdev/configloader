@@ -31,7 +31,10 @@ func fooCmd(cfgldr *cobraconfig.ConfigLoader[map[any]any]) *cobra.Command {
 func main() {
 	cfgldr := cobraconfig.ConfigLoader[map[any]any]{
 		DefaultSources: config.Sources[map[any]any]{
-			config.FileSource[map[any]any]{Path: "/etc/configloader.yml"},
+			config.FileSource[map[any]any]{
+				Path:      "/etc/configloader.yml",
+				Unmarshal: config.YamlValueTemplateUnmarshal,
+			},
 			config.DirSource[map[any]any]{Path: "/etc/configloader.d"},
 			config.FileSource[map[any]any]{Path: "~/.config/configloader.yml"},
 			config.DirSource[map[any]any]{Path: "~/.config/configloader.d"},
