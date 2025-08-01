@@ -32,8 +32,10 @@ func main() {
 	cfgldr := cobraconfig.ConfigLoader[map[any]any]{
 		DefaultSources: config.Sources[map[any]any]{
 			config.FileSource[map[any]any]{
-				Path:      "/etc/configloader.yml",
-				Unmarshal: config.YamlValueTemplateUnmarshal,
+				Path: "/etc/configloader.yml",
+				// CODE_REVIEW_CATCH_ME: should probalby make this a factory method for
+				// all types of unmarshaler that takes an opts or something... dunno
+				Unmarshal: config.YamlValueTemplateUnmarshal[map[any]any](nil),
 			},
 			config.DirSource[map[any]any]{Path: "/etc/configloader.d"},
 			config.FileSource[map[any]any]{Path: "~/.config/configloader.yml"},

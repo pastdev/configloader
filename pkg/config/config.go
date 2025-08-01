@@ -154,34 +154,34 @@ func YamlUnmarshal[T any](b []byte, cfg *T) error {
 // yaml, then processes each _value_ individually through the go template engine
 // then reserializes the result to yaml before unmarshaling into T.
 func YamlValueTemplateUnmarshal[T any](
-	b []byte,
-	cfg *T,
 	templateFunc func(keystack []string, value any) (any, error),
-) error {
-	var valueMap map[any]any
-	err := yaml.Unmarshal(b, &valueMap)
-	if err != nil {
-		return fmt.Errorf("yamlunmarshal to valueMap: %w", err)
-	}
+) func(b []byte, cfg *T) error {
+	return func(b []byte, cfg *T) error {
+		var valueMap map[any]any
+		err := yaml.Unmarshal(b, &valueMap)
+		if err != nil {
+			return fmt.Errorf("yamlunmarshal to valueMap: %w", err)
+		}
 
-	if templateFunc == nil {
-		templateFunc = DefaultTemplateFunc
-	}
+		if templateFunc == nil {
+			templateFunc = DefaultTemplateFunc
+		}
 
-	// walk the map and template each value
-	err = Walk(templateFunc, valueMap)
-	if err != nil {
-		return fmt.Errorf("yamlunmarshal walk valueMap: %w", err)
-	}
+		// walk the map and template each value
+		err = Walk(templateFunc, valueMap)
+		if err != nil {
+			return fmt.Errorf("yamlunmarshal walk valueMap: %w", err)
+		}
 
-	data, err := yaml.Marshal(valueMap)
-	if err != nil {
-		return fmt.Errorf("yamlunmarshal from valueMap: %w", err)
-	}
+		data, err := yaml.Marshal(valueMap)
+		if err != nil {
+			return fmt.Errorf("yamlunmarshal from valueMap: %w", err)
+		}
 
-	err = yaml.Unmarshal(data, cfg)
-	if err != nil {
-		return fmt.Errorf("yamlunmarshal to type: %w", err)
+		err = yaml.Unmarshal(data, cfg)
+		if err != nil {
+			return fmt.Errorf("yamlunmarshal to type: %w", err)
+		}
+		return nil
 	}
-	return nil
 }
