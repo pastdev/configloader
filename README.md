@@ -19,19 +19,63 @@ Subsequent sources will merge their values over the top of any existing values s
 
 See the [example](./pkg/config/example_test.go) or [tests](./pkg/config/config_test.go) for more use cases.
 
-### pkg/config Logger
+### Unmarshaling
+
+By default, `YamlUnmarshal` is used.
+However, you can replace that with a custom unmarshaler if you would like:
+
+```go
+    sources := config.Sources[AppConfig]{
+        config.FileSource[map[any]any]{
+            Path: "~/.config/configloader.tmpl.d",
+            Unmarshal: func(b []byte, cfg *map[any]any) error {
+                return json.Unmarshal(b, cfg)
+            },
+        },
+    }
+```
+
+### Templating
+
+You can also configure your source loaders to pre-process config file values with the go templating engine:
+
+```go
+    sources := config.Sources[AppConfig]{
+        config.FileSource[AppConfig]{
+            Path: "/etc/configloader.tmpl.yml",
+            Unmarshal: config.
+                YamlValueTemplateUnmarshal[AppConfig](
+                    config.NewTemplate(config.DefaultFuncMap))
+        },
+    }
+```
+
+The `config.DefaultFuncMap` contains utility functions for accessing secrets from various password managers (ie: [lastpass](#lastpass), [bitwarden](#bitwarden)).
+This map can be added to, or replaced.
+
+#### Bitwarden
+
+To use the bitwarden template functions, you need to install the [`rbw`](https://github.com/doy/rbw) client.
+The template functions assume you have an _active session_ (ie: `rbw unlock`) from which it will obtain the secrets.
+
+#### Lastpass
+
+To use the lastpass template functions, you need to install the [`lastpass-cli`](https://github.com/lastpass/lastpass-cli) client.
+The template functions assume you have an _active session_ (ie: `lpass login <USER>`) from which it will obtain the secrets.
+
+## pkg/log
 
 This library uses [`zerolog`](https://github.com/rs/zerolog) for logging.
 The `Logger` can be set by consumers as follows:
 
 ```go
 import(
-    "github.com/pastdev/configloader/pkg/config"
+    "github.com/pastdev/configloader/pkg/log"
 )
 
 ...
 
-    config.Logger = zerolog.New(os.Stderr).Level(zerolog.TraceLevel).With().Timestamp().Logger()
+    log.Logger = zerolog.New(os.Stderr).Level(zerolog.TraceLevel).With().Timestamp().Logger()
 ```
 
 ## pkg/cobra
@@ -55,11 +99,11 @@ Optionally, you can use flags to allow your user to replace the `DefaultSources`
 
 ```go
     cfg.PersistentFlags(&root).FileSourceVar(
-        config.YamlUnmarshal,
+        config.YamlUnmarshal[map[any]any](),
         "config",
         "location of one or more config files")
     cfg.PersistentFlags(&root).DirSourceVar(
-        config.YamlUnmarshal,
+        config.YamlUnmarshal[map[any]any](),
         "config-dir",
         "location of one or more config directories")
 ```

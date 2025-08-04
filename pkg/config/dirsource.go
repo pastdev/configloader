@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/pastdev/configloader/pkg/log"
 	"github.com/rs/zerolog"
 )
 
@@ -22,7 +23,7 @@ func (s DirSource[T]) Load(cfg *T) error {
 	dir := normalizePath(s.Path)
 	listing, err := os.ReadDir(dir)
 	if err != nil {
-		Logger.Debug().Str("dir", dir).Msg("no configs found")
+		log.Logger.Debug().Str("dir", dir).Msg("no configs found")
 		//nolint: nilerr // intentional ignore error
 		return nil
 	}
@@ -32,7 +33,7 @@ func (s DirSource[T]) Load(cfg *T) error {
 		name := entry.Name()
 		if !entry.Type().IsRegular() {
 			if entry.IsDir() {
-				Logger.Debug().
+				log.Logger.Debug().
 					Str("dir", dir).
 					Str("subdir", entry.Name()).
 					Msg("skipping subdir")
@@ -48,7 +49,7 @@ func (s DirSource[T]) Load(cfg *T) error {
 				return fmt.Errorf("stat: %w", err)
 			}
 			if entry.IsDir() {
-				Logger.Debug().
+				log.Logger.Debug().
 					Str("dir", dir).
 					Str("symlinkSubdir", entry.Name()).
 					Msg("skipping subdir")
@@ -60,7 +61,7 @@ func (s DirSource[T]) Load(cfg *T) error {
 		file := filepath.Join(dir, name)
 		b, err := os.ReadFile(file)
 		if err != nil {
-			Logger.Debug().Str("file", file).Msg("config not found")
+			log.Logger.Debug().Str("file", file).Msg("config not found")
 			//nolint: nilerr // intentional ignore error
 			return nil
 		}
@@ -72,7 +73,7 @@ func (s DirSource[T]) Load(cfg *T) error {
 		}
 	}
 
-	Logger.Debug().Str("dir", s.Path).Array("files", files).Msg("loaded dirsource config")
+	log.Logger.Debug().Str("dir", s.Path).Array("files", files).Msg("loaded dirsource config")
 	return nil
 }
 

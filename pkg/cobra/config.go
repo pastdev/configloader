@@ -87,7 +87,7 @@ func (c *ConfigLoader[T]) AddSubCommandTo(root *cobra.Command, opts ...ConfigCom
 		opt(&options)
 	}
 
-	var output string
+	output := "yaml"
 
 	cmd := cobra.Command{
 		Use:          "config",
