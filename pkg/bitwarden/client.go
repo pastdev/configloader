@@ -11,14 +11,8 @@ import (
 	"github.com/pastdev/configloader/pkg/log"
 )
 
-type Entry struct {
-	Data    Data      `json:"data"`
-	Fields  []Field   `json:"fields"`
-	Folder  string    `json:"folder"`
-	History []History `json:"history"`
-	ID      string    `json:"id"`
-	Name    string    `json:"name"`
-	Notes   string    `json:"notes"`
+type Client struct {
+	Lookup func(id string) ([]byte, error)
 }
 
 type Data struct {
@@ -28,9 +22,14 @@ type Data struct {
 	Username string `json:"username"`
 }
 
-type URI struct {
-	MatchType int    `json:"match_type"`
-	URI       string `json:"uri"`
+type Entry struct {
+	Data    Data      `json:"data"`
+	Fields  []Field   `json:"fields"`
+	Folder  string    `json:"folder"`
+	History []History `json:"history"`
+	ID      string    `json:"id"`
+	Name    string    `json:"name"`
+	Notes   string    `json:"notes"`
 }
 
 type Field struct {
@@ -42,6 +41,65 @@ type Field struct {
 type History struct {
 	LastUsedDate string `json:"last_used_date"`
 	Password     string `json:"password"`
+}
+
+type URI struct {
+	MatchType int    `json:"match_type"`
+	URI       string `json:"uri"`
+}
+
+func (c Client) AddFuncs(funcs map[string]any) {
+	funcs["bitwardenField"] = c.GetField
+	funcs["bitwardenFormat"] = c.GetFormat
+	funcs["bitwardenJSON"] = c.GetJSON
+}
+
+func (c Client) GetJSON(id string) (string, error) {
+	data, err := c.Lookup(id)
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
+}
+
+func (c Client) GetField(id string, name string) (string, error) {
+	entry, err := c.unmarshal(id)
+	if err != nil {
+		return "", err
+	}
+
+	for _, field := range entry.Fields {
+		if field.Name == name {
+			return field.Value, nil
+		}
+	}
+
+	return "", nil
+}
+
+func (c Client) GetFormat(id string, format string, name ...string) (string, error) {
+	entry, err := c.unmarshal(id)
+	if err != nil {
+		return "", err
+	}
+
+	return entry.Format(format, name...), nil
+}
+
+func (c Client) unmarshal(id string) (*Entry, error) {
+	data, err := c.Lookup(id)
+	if err != nil {
+		return nil, err
+	}
+
+	var entry Entry
+	err = json.Unmarshal(data, &entry)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal rbw entry: %w", err)
+	}
+
+	return &entry, nil
 }
 
 func (e *Entry) Format(format string, name ...string) string {
@@ -68,7 +126,11 @@ func (e *Entry) Format(format string, name ...string) string {
 	return fmt.Sprintf(format, formatArgs...)
 }
 
-func getJSON(id string) ([]byte, error) {
+func New() *Client {
+	return &Client{Lookup: lookup}
+}
+
+func lookup(id string) ([]byte, error) {
 	log.Logger.Trace().Str("provider", "bitwarden").Str("id", id).Msg("getJSON")
 	cmd := exec.Command("rbw", "get", id, "--raw")
 
@@ -86,28 +148,4 @@ func getJSON(id string) ([]byte, error) {
 	}
 
 	return stdout.Bytes(), nil
-}
-
-func GetJSON(id string) (string, error) {
-	data, err := getJSON(id)
-	if err != nil {
-		return "", err
-	}
-
-	return string(data), nil
-}
-
-func GetFormat(id string, format string, name ...string) (string, error) {
-	data, err := getJSON(id)
-	if err != nil {
-		return "", err
-	}
-
-	var entry Entry
-	err = json.Unmarshal(data, &entry)
-	if err != nil {
-		return "", fmt.Errorf("unmarshal rbw entry: %w", err)
-	}
-
-	return entry.Format(format, name...), nil
 }

@@ -11,6 +11,10 @@ import (
 	"github.com/pastdev/configloader/pkg/log"
 )
 
+type Client struct {
+	Lookup func(id string) ([]byte, error)
+}
+
 type Entry struct {
 	Fullname        string `json:"fullname"`
 	Group           string `json:"group"`
@@ -23,6 +27,44 @@ type Entry struct {
 	Share           string `json:"share"`
 	URL             string `json:"url"`
 	Username        string `json:"username"`
+}
+
+func (c Client) AddFuncs(funcs map[string]any) {
+	funcs["lastpassFormat"] = c.GetFormat
+	funcs["lastpassJSON"] = c.GetJSON
+}
+
+func (c Client) GetJSON(id string) (string, error) {
+	data, err := c.Lookup(id)
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
+}
+
+func (c Client) GetFormat(id string, format string, name ...string) (string, error) {
+	entry, err := c.unmarshal(id)
+	if err != nil {
+		return "", err
+	}
+
+	return entry.Format(format, name...), nil
+}
+
+func (c Client) unmarshal(id string) (*Entry, error) {
+	data, err := c.Lookup(id)
+	if err != nil {
+		return nil, err
+	}
+
+	var entry []Entry
+	err = json.Unmarshal(data, &entry)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal lastpass entry: %w", err)
+	}
+
+	return &entry[0], nil
 }
 
 func (e *Entry) Format(format string, name ...string) string {
@@ -59,7 +101,13 @@ func (e *Entry) Format(format string, name ...string) string {
 	return fmt.Sprintf(format, formatArgs...)
 }
 
-func getJSON(id string) ([]byte, error) {
+func New() *Client {
+	return &Client{
+		Lookup: lookup,
+	}
+}
+
+func lookup(id string) ([]byte, error) {
 	log.Logger.Trace().Str("provider", "lastpass").Str("id", id).Msg("getJSON")
 	cmd := exec.Command("lpass", "show", id, "--json")
 
@@ -77,28 +125,4 @@ func getJSON(id string) ([]byte, error) {
 	}
 
 	return stdout.Bytes(), nil
-}
-
-func GetJSON(id string) (string, error) {
-	data, err := getJSON(id)
-	if err != nil {
-		return "", err
-	}
-
-	return string(data), nil
-}
-
-func GetFormat(id string, format string, name ...string) (string, error) {
-	data, err := getJSON(id)
-	if err != nil {
-		return "", err
-	}
-
-	var entry []Entry
-	err = json.Unmarshal(data, &entry)
-	if err != nil {
-		return "", fmt.Errorf("unmarshal rbw entry: %w", err)
-	}
-
-	return entry[0].Format(format, name...), nil
 }

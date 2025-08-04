@@ -3,7 +3,6 @@ module github.com/pastdev/configloader
 go 1.24.1
 
 require (
-	dario.cat/mergo v1.0.2
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
@@ -11,7 +10,6 @@ require (
 )
 
 require (
-	github.com/bitwarden/sdk-go v1.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect

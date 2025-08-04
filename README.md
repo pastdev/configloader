@@ -45,12 +45,12 @@ You can also configure your source loaders to pre-process config file values wit
             Path: "/etc/configloader.tmpl.yml",
             Unmarshal: config.
                 YamlValueTemplateUnmarshal[AppConfig](
-                    config.NewTemplate(config.DefaultFuncMap))
+                    config.NewTemplate(config.DefaultFuncMap()))
         },
     }
 ```
 
-The `config.DefaultFuncMap` contains utility functions for accessing secrets from various password managers (ie: [lastpass](#lastpass), [bitwarden](#bitwarden)).
+The `config.DefaultFuncMap()` contains utility functions for accessing secrets from various password managers (ie: [lastpass](#lastpass), [bitwarden](#bitwarden)).
 This map can be added to, or replaced.
 
 #### Bitwarden

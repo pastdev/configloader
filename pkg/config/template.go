@@ -13,15 +13,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var DefaultFuncMap = map[string]any{
-	"bitwardenFormat": bitwarden.GetFormat,
-	"bitwardenJSON":   bitwarden.GetJSON,
-	"lastpassFormat":  lastpass.GetFormat,
-	"lastpassJSON":    lastpass.GetJSON,
+func DefaultFuncMap() map[string]any {
+	funcs := map[string]any{}
+	bitwarden.New().AddFuncs(funcs)
+	lastpass.New().AddFuncs(funcs)
+	return funcs
 }
 
 type Template struct {
-	funcMap template.FuncMap
+	funcMap map[string]any
 }
 
 type Executor interface {
@@ -129,7 +129,7 @@ func YamlValueTemplateUnmarshal[T any](executor Executor) func(b []byte, cfg *T)
 		}
 
 		if executor == nil {
-			executor = NewTemplate(DefaultFuncMap)
+			executor = NewTemplate(DefaultFuncMap())
 		}
 
 		// walk the map and template each value

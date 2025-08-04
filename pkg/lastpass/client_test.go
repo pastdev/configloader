@@ -1,20 +1,22 @@
 package lastpass_test
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/pastdev/configloader/pkg/lastpass"
 	"github.com/stretchr/testify/require"
 )
 
+func staticLookupClient(data string) lastpass.Client {
+	return lastpass.Client{
+		Lookup: func(_ string) ([]byte, error) { return []byte(data), nil },
+	}
+}
+
 func TestFormat(t *testing.T) {
 	test := func(t *testing.T, data string, args []string, expected string) {
-		var entry []lastpass.Entry
-		err := json.Unmarshal([]byte(data), &entry)
+		actual, err := staticLookupClient(data).GetFormat("", args[0], args[1:]...)
 		require.NoError(t, err)
-
-		actual := entry[0].Format(args[0], args[1:]...)
 		require.Equal(t, expected, actual)
 	}
 
