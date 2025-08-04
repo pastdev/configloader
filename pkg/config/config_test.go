@@ -233,13 +233,3 @@ func TestLoad(t *testing.T) {
 		}.Test(t, cfg{Foo: "baz", Hip: "hop"}, actual)
 	})
 }
-
-func TestYamlValueTemplateUnmarshal(t *testing.T) {
-	var valueMap map[any]any
-	err := config.YamlValueTemplateUnmarshal(
-		[]byte(`{"foo":"bar"}`),
-		&valueMap,
-		func(_ []string, _ any) (any, error) { return "foo", nil })
-	require.NoError(t, err)
-	require.Equal(t, map[any]any{"foo": "foo"}, valueMap)
-}
