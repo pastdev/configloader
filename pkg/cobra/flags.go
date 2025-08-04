@@ -2,7 +2,7 @@ package cobra
 
 import (
 	"github.com/pastdev/configloader/pkg/config"
-	"github.com/rs/zerolog/log"
+	"github.com/pastdev/configloader/pkg/log"
 	"github.com/spf13/cobra"
 )
 
@@ -113,10 +113,10 @@ func (m *sourcesValue[T]) Set(v string) error {
 	src := m.factory(v)
 
 	if len(*m.sources) > 0 {
-		log.Trace().Stringer("source", src).Msg("adding config source")
+		log.Logger.Trace().Stringer("source", src).Msg("adding config source")
 		*m.sources = append(*m.sources, src)
 	} else {
-		log.Trace().Stringer("source", src).Msg("initial config source")
+		log.Logger.Trace().Stringer("source", src).Msg("initial config source")
 		*m.sources = config.Sources[T]{src}
 	}
 

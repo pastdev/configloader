@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/pastdev/configloader/pkg/log"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,7 +33,7 @@ func (s Sources[T]) Load(cfg *T) error {
 			return fmt.Errorf("load: %w", err)
 		}
 	}
-	log.Debug().Dur("duration", time.Since(start)).Msg("load complete")
+	log.Logger.Debug().Dur("duration", time.Since(start)).Msg("load complete")
 	return nil
 }
 
@@ -41,7 +41,7 @@ func normalizePath(path string) string {
 	if strings.HasPrefix(path, "~/") {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			log.Trace().Err(err).Msg("User home directory not defined")
+			log.Logger.Trace().Err(err).Msg("User home directory not defined")
 			return path
 		}
 		path = filepath.Join(homeDir, path[1:])
