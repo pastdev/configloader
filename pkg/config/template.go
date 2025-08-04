@@ -2,19 +2,22 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"text/template"
 
 	"github.com/pastdev/configloader/pkg/bitwarden"
+	"github.com/pastdev/configloader/pkg/lastpass"
 	"gopkg.in/yaml.v3"
 )
 
 var DefaultFuncMap = map[string]any{
 	"bitwardenFormat": bitwarden.GetFormat,
 	"bitwardenJSON":   bitwarden.GetJSON,
-	"number2":         func() int { return 2 },
+	"lastpassFormat":  lastpass.GetFormat,
+	"lastpassJSON":    lastpass.GetJSON,
 }
 
 type Template struct {
@@ -45,10 +48,17 @@ func (t *Template) Execute(name string, value any) (any, error) {
 		return nil, fmt.Errorf("execute template: %w", err)
 	}
 
-	return newValue.String(), nil
+	raw := newValue.Bytes()
+	var parsed any
+	err = json.Unmarshal(raw, &parsed)
+	if err != nil {
+		//nolint: nilerr // json parse is best effort
+		return string(raw), nil
+	}
+	return parsed, nil
 }
 
-func New(funcMap template.FuncMap) *Template {
+func NewTemplate(funcMap template.FuncMap) *Template {
 	return &Template{
 		funcMap: funcMap,
 	}
@@ -99,7 +109,11 @@ func walk(callback Executor, node any, keyStack []string) (any, error) {
 		}
 		return typed, nil
 	default:
-		return callback.Execute(fmt.Sprintf("/%s", strings.Join(keyStack, "/")), node)
+		v, err := callback.Execute(fmt.Sprintf("/%s", strings.Join(keyStack, "/")), node)
+		if err != nil {
+			return nil, fmt.Errorf("execute template: %w", err)
+		}
+		return v, nil
 	}
 }
 
@@ -115,7 +129,7 @@ func YamlValueTemplateUnmarshal[T any](executor Executor) func(b []byte, cfg *T)
 		}
 
 		if executor == nil {
-			executor = New(DefaultFuncMap)
+			executor = NewTemplate(DefaultFuncMap)
 		}
 
 		// walk the map and template each value

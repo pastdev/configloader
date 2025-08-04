@@ -1,14 +1,26 @@
 package lastpass_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/pastdev/configloader/pkg/lastpass"
 	"github.com/stretchr/testify/require"
 )
 
-func TestShow(t *testing.T) {
-	entry := `[
+func TestFormat(t *testing.T) {
+	test := func(t *testing.T, data string, args []string, expected string) {
+		var entry []lastpass.Entry
+		err := json.Unmarshal([]byte(data), &entry)
+		require.NoError(t, err)
+
+		actual := entry[0].Format(args[0], args[1:]...)
+		require.Equal(t, expected, actual)
+	}
+
+	t.Run("simple", func(t *testing.T) {
+		test(t,
+			`[
   {
     "id": "3818021426",
     "name": "foo",
@@ -22,10 +34,8 @@ func TestShow(t *testing.T) {
     "url": "https://dip.dap.org",
     "note": "20250407: empty\n20241004: value"
   }
-]`
-	require.NotEmpty(t, entry)
-
-	actual, err := lastpass.Show("3818021426", "%s/%s", "username", "password")
-	require.NoError(t, err)
-	require.Equal(t, "user/pass", actual)
+]`,
+			[]string{"%s/%s", "username", "password"},
+			"user/pass")
+	})
 }

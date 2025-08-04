@@ -5,14 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
-
-// Logger is the logger used by this library
-var Logger zerolog.Logger
 
 // SourceLoader is the primary interface for loading configuration from a
 // source.
@@ -29,12 +26,14 @@ type Sources[T any] []SourceLoader[T]
 // load its values over the top of the previous loaders directly into the
 // supplied cfg object.
 func (s Sources[T]) Load(cfg *T) error {
+	start := time.Now()
 	for _, src := range s {
 		err := src.Load(cfg)
 		if err != nil {
 			return fmt.Errorf("load: %w", err)
 		}
 	}
+	log.Debug().Dur("duration", time.Since(start)).Msg("load complete")
 	return nil
 }
 
@@ -52,7 +51,7 @@ func normalizePath(path string) string {
 
 func unmarshal[T any](b []byte, cfg *T, unmarshal func(b []byte, cfg *T) error) error {
 	if unmarshal == nil {
-		unmarshal = YamlUnmarshal
+		unmarshal = YamlUnmarshal[T]()
 	}
 
 	err := unmarshal(b, cfg)
@@ -63,10 +62,12 @@ func unmarshal[T any](b []byte, cfg *T, unmarshal func(b []byte, cfg *T) error) 
 }
 
 // YamlUnmarshal is an Unmarshal function that unmarshals from yaml.
-func YamlUnmarshal[T any](b []byte, cfg *T) error {
-	err := yaml.Unmarshal(b, cfg)
-	if err != nil {
-		return fmt.Errorf("yamlunmarshal: %w", err)
+func YamlUnmarshal[T any]() func(b []byte, cfg *T) error {
+	return func(b []byte, cfg *T) error {
+		err := yaml.Unmarshal(b, cfg)
+		if err != nil {
+			return fmt.Errorf("yamlunmarshal: %w", err)
+		}
+		return nil
 	}
-	return nil
 }

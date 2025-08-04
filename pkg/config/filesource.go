@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
+
+	"github.com/pastdev/configloader/pkg/log"
 )
 
 // FileSource is a config file to load.
@@ -16,7 +18,7 @@ type FileSource[T any] struct {
 func (s FileSource[T]) Load(cfg *T) error {
 	b, err := os.ReadFile(normalizePath(s.Path))
 	if err != nil {
-		Logger.Debug().Str("file", s.Path).Msg("config not found")
+		log.Logger.Debug().Str("file", s.Path).Msg("config not found")
 		//nolint: nilerr // intentional ignore error
 		return nil
 	}
@@ -26,7 +28,7 @@ func (s FileSource[T]) Load(cfg *T) error {
 		return fmt.Errorf("load from file: %w", err)
 	}
 
-	Logger.Debug().Str("file", s.Path).Msg("loaded filesource config")
+	log.Logger.Debug().Str("file", s.Path).Msg("loaded filesource config")
 	return nil
 }
 

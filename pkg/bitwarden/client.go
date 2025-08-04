@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/pastdev/configloader/pkg/log"
 )
 
 type Entry struct {
@@ -67,6 +69,7 @@ func (e *Entry) Format(format string, name ...string) string {
 }
 
 func getJSON(id string) ([]byte, error) {
+	log.Logger.Trace().Str("provider", "bitwarden").Str("id", id).Msg("getJSON")
 	cmd := exec.Command("rbw", "get", id, "--raw")
 
 	var stdout bytes.Buffer
@@ -106,25 +109,5 @@ func GetFormat(id string, format string, name ...string) (string, error) {
 		return "", fmt.Errorf("unmarshal rbw entry: %w", err)
 	}
 
-	formatArgs := make([]any, len(name))
-	for i, n := range name {
-		var v any
-		switch n {
-		case "folder":
-			v = entry.Folder
-		case "id":
-			v = entry.ID
-		case "name":
-			v = entry.Name
-		case "notes":
-			v = entry.Notes
-		case "password":
-			v = entry.Data.Password
-		case "username":
-			v = entry.Data.Username
-		}
-		formatArgs[i] = v
-	}
-
-	return fmt.Sprintf(format, formatArgs...), nil
+	return entry.Format(format, name...), nil
 }

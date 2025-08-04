@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestShow(t *testing.T) {
+func TestFormat(t *testing.T) {
 	test := func(t *testing.T, data string, args []string, expected string) {
 		var entry bitwarden.Entry
 		err := json.Unmarshal([]byte(data), &entry)
