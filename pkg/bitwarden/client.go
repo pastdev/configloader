@@ -132,6 +132,7 @@ func New() *Client {
 
 func lookup(id string) ([]byte, error) {
 	log.Logger.Trace().Str("provider", "bitwarden").Str("id", id).Msg("getJSON")
+	//nolint:gosec // id is safe in command getting invoked
 	cmd := exec.Command("rbw", "get", id, "--raw")
 
 	var stdout bytes.Buffer

@@ -1,3 +1,4 @@
+//nolint:goconst // explicit strings have explanatory value in tests
 package config_test
 
 import (

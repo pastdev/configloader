@@ -109,6 +109,7 @@ func New() *Client {
 
 func lookup(id string) ([]byte, error) {
 	log.Logger.Trace().Str("provider", "lastpass").Str("id", id).Msg("getJSON")
+	//nolint:gosec // id is safe in command getting invoked
 	cmd := exec.Command("lpass", "show", id, "--json")
 
 	var stdout bytes.Buffer

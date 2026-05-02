@@ -11,6 +11,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const OutputYaml = "yaml"
+
 type ConfigCommandOption[T any] func(*ConfigCommandOptions[T])
 
 type ConfigCommandOptions[T any] struct {
@@ -74,7 +76,7 @@ func (c *ConfigLoader[T]) PersistentFlags(root *cobra.Command) *flags[T] {
 func (c *ConfigLoader[T]) AddSubCommandTo(root *cobra.Command, opts ...ConfigCommandOption[T]) {
 	options := ConfigCommandOptions[T]{
 		Output: map[string]func(w io.Writer, cfg *T) error{
-			"yaml": func(w io.Writer, cfg *T) error {
+			OutputYaml: func(w io.Writer, cfg *T) error {
 				err := yaml.NewEncoder(w).Encode(cfg)
 				if err != nil {
 					return fmt.Errorf("serialize config: %w", err)
@@ -87,7 +89,7 @@ func (c *ConfigLoader[T]) AddSubCommandTo(root *cobra.Command, opts ...ConfigCom
 		opt(&options)
 	}
 
-	output := "yaml"
+	output := OutputYaml
 
 	cmd := cobra.Command{
 		Use:          "config",
@@ -122,7 +124,7 @@ func (c *ConfigLoader[T]) AddSubCommandTo(root *cobra.Command, opts ...ConfigCom
 		cmd.Flags().StringVar(
 			&output,
 			"output",
-			"yaml",
+			OutputYaml,
 			fmt.Sprintf("Format of output, one of: %s", strings.Join(formatters, ", ")))
 	} else {
 		// no option was added, so we set output to the default formatter
