@@ -59,6 +59,7 @@ func (s DirSource[T]) Load(cfg *T) error {
 		}
 
 		file := filepath.Join(dir, name)
+		//nolint:gosec // intent is to allow user specified config directory/file
 		b, err := os.ReadFile(file)
 		if err != nil {
 			log.Logger.Debug().Str("file", file).Msg("config not found")

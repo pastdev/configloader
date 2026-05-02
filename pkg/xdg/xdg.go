@@ -25,7 +25,7 @@ func homePath(subPath string, envVar string) (string, error) {
 	return filepath.Join(home, subPath), nil
 }
 
-// XdgBinHome returns the conventional dir for user binaries. This is not
+// BinHome returns the conventional dir for user binaries. This is not
 // technically part of the spec, but the spec does say:
 //
 //	There is a single base directory relative to which user-specific executable
@@ -36,25 +36,25 @@ func homePath(subPath string, envVar string) (string, error) {
 //	User-specific executable files may be stored in $HOME/.local/bin.
 //	Distributions should ensure this directory shows up in the UNIX $PATH
 //	environment variable, at an appropriate place.
-func XdgBinHome() (string, error) {
+func BinHome() (string, error) {
 	return homePath(".local/bin", "XDG_BIN_HOME")
 }
 
-// XdgCacheHome implements the spec for:
+// CacheHome implements the spec for:
 //
 //	There is a single base directory relative to which user-specific
 //	non-essential (cached) data should be written. This directory is defined by
 //	the environment variable $XDG_CACHE_HOME.
-func XdgCacheHome() (string, error) {
+func CacheHome() (string, error) {
 	return homePath(".cache", "XDG_CACHE_HOME")
 }
 
-// XdgConfigDirs implements the spec for:
+// ConfigDirs implements the spec for:
 //
 //	There is a set of preference ordered base directories relative to which
 //	configuration files should be searched. This set of directories is defined
 //	by the environment variable $XDG_CONFIG_DIRS.
-func XdgConfigDirs() (string, error) {
+func ConfigDirs() (string, error) {
 	if v, ok := os.LookupEnv("XDG_CONFIG_DIRS"); ok {
 		return v, nil
 	}
@@ -62,21 +62,21 @@ func XdgConfigDirs() (string, error) {
 	return "/etc/xdg", nil
 }
 
-// XdgConfigHome implements the spec for:
+// ConfigHome implements the spec for:
 //
 //	There is a single base directory relative to which user-specific
 //	configuration files should be written. This directory is defined by the
 //	environment variable $XDG_CONFIG_HOME.
-func XdgConfigHome() (string, error) {
+func ConfigHome() (string, error) {
 	return homePath(".config", "XDG_CONFIG_HOME")
 }
 
-// XdgDataDirs implements the spec for:
+// DataDirs implements the spec for:
 //
 //	There is a set of preference ordered base directories relative to which
 //	data files should be searched. This set of directories is defined by the
 //	environment variable $XDG_DATA_DIRS.
-func XdgDataDirs() (string, error) {
+func DataDirs() (string, error) {
 	if v, ok := os.LookupEnv("XDG_DATA_DIRS"); ok {
 		return v, nil
 	}
@@ -84,30 +84,30 @@ func XdgDataDirs() (string, error) {
 	return "/usr/local/share/:/usr/share/", nil
 }
 
-// XdgDataHome implements the spec for:
+// DataHome implements the spec for:
 //
 //	There is a single base directory relative to which user-specific data files
 //	should be written. This directory is defined by the environment variable
 //	$XDG_DATA_HOME.
-func XdgDataHome() (string, error) {
+func DataHome() (string, error) {
 	return homePath(".local/share", "XDG_DATA_HOME")
 }
 
-// XdgStateHome implements the spec for:
+// StateHome implements the spec for:
 //
 //	There is a single base directory relative to which user-specific state data
 //	should be written. This directory is defined by the environment variable
 //	$XDG_STATE_HOME.
-func XdgStateHome() (string, error) {
+func StateHome() (string, error) {
 	return homePath(".local/state", "XDG_STATE_HOME")
 }
 
-// XdgRuntimeDir implements the spec for:
+// RuntimeDir implements the spec for:
 //
 //	There is a single base directory relative to which user-specific runtime
 //	files and other file objects should be placed. This directory is defined by
 //	the environment variable $XDG_RUNTIME_DIR.
-func XdgRuntimeDir() (string, error) {
+func RuntimeDir() (string, error) {
 	if v, ok := os.LookupEnv("XDG_RUNTIME_DIR"); ok {
 		return v, nil
 	}
@@ -122,12 +122,12 @@ func XdgRuntimeDir() (string, error) {
 }
 
 func AddFuncs(funcs template.FuncMap) {
-	funcs["xdgBinHome"] = XdgBinHome
-	funcs["xdgCacheHome"] = XdgCacheHome
-	funcs["xdgConfigDirs"] = XdgConfigDirs
-	funcs["xdgConfigHome"] = XdgConfigHome
-	funcs["xdgDataDirs"] = XdgDataDirs
-	funcs["xdgDataHome"] = XdgDataHome
-	funcs["xdgStateHome"] = XdgStateHome
-	funcs["xdgRuntimeDir"] = XdgRuntimeDir
+	funcs["xdgBinHome"] = BinHome
+	funcs["xdgCacheHome"] = CacheHome
+	funcs["xdgConfigDirs"] = ConfigDirs
+	funcs["xdgConfigHome"] = ConfigHome
+	funcs["xdgDataDirs"] = DataDirs
+	funcs["xdgDataHome"] = DataHome
+	funcs["xdgStateHome"] = StateHome
+	funcs["xdgRuntimeDir"] = RuntimeDir
 }

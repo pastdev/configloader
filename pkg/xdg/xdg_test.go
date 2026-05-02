@@ -11,10 +11,11 @@ import (
 )
 
 func TestAddFuncs(t *testing.T) {
-	unsetenv := func(name string) func() {
+	unsetenv := func(t *testing.T, name string) func() {
 		if v, isSet := os.LookupEnv(name); isSet {
-			os.Unsetenv(name)
-			return func() { os.Setenv(name, v) }
+			err := os.Unsetenv(name)
+			require.NoError(t, err)
+			return func() { _ = os.Setenv(name, v) }
 		}
 		return func() {}
 	}
@@ -35,7 +36,7 @@ func TestAddFuncs(t *testing.T) {
 	homeDir := u.HomeDir
 
 	t.Run("xdgBinHome", func(t *testing.T) {
-		defer unsetenv("XDG_BIN_HOME")()
+		defer unsetenv(t, "XDG_BIN_HOME")()
 		test(t, "xdgBinHome", filepath.Join(homeDir, ".local", "bin"))
 	})
 
@@ -46,7 +47,7 @@ func TestAddFuncs(t *testing.T) {
 	})
 
 	t.Run("xdgCacheHome", func(t *testing.T) {
-		defer unsetenv("XDG_CACHE_HOME")()
+		defer unsetenv(t, "XDG_CACHE_HOME")()
 		test(t, "xdgCacheHome", filepath.Join(homeDir, ".cache"))
 	})
 
@@ -57,7 +58,7 @@ func TestAddFuncs(t *testing.T) {
 	})
 
 	t.Run("xdgConfigDirs", func(t *testing.T) {
-		defer unsetenv("XDG_CONFIG_DIRS")()
+		defer unsetenv(t, "XDG_CONFIG_DIRS")()
 		test(t, "xdgConfigDirs", "/etc/xdg")
 	})
 
@@ -68,7 +69,7 @@ func TestAddFuncs(t *testing.T) {
 	})
 
 	t.Run("xdgConfigHome", func(t *testing.T) {
-		defer unsetenv("XDG_CONFIG_HOME")()
+		defer unsetenv(t, "XDG_CONFIG_HOME")()
 		test(t, "xdgConfigHome", filepath.Join(homeDir, ".config"))
 	})
 
@@ -79,7 +80,7 @@ func TestAddFuncs(t *testing.T) {
 	})
 
 	t.Run("xdgDataDirs", func(t *testing.T) {
-		defer unsetenv("XDG_DATA_DIRS")()
+		defer unsetenv(t, "XDG_DATA_DIRS")()
 		test(t, "xdgDataDirs", "/usr/local/share/:/usr/share/")
 	})
 
@@ -90,7 +91,7 @@ func TestAddFuncs(t *testing.T) {
 	})
 
 	t.Run("xdgDataHome", func(t *testing.T) {
-		defer unsetenv("XDG_DATA_HOME")()
+		defer unsetenv(t, "XDG_DATA_HOME")()
 		test(t, "xdgDataHome", filepath.Join(homeDir, ".local", "share"))
 	})
 
@@ -101,7 +102,7 @@ func TestAddFuncs(t *testing.T) {
 	})
 
 	t.Run("xdgStateHome", func(t *testing.T) {
-		defer unsetenv("XDG_STATE_HOME")()
+		defer unsetenv(t, "XDG_STATE_HOME")()
 		test(t, "xdgStateHome", filepath.Join(homeDir, ".local", "state"))
 	})
 
@@ -112,7 +113,7 @@ func TestAddFuncs(t *testing.T) {
 	})
 
 	t.Run("xdgRuntimeDir", func(t *testing.T) {
-		defer unsetenv("XDG_RUNTIME_DIR")()
+		defer unsetenv(t, "XDG_RUNTIME_DIR")()
 		expected := fmt.Sprintf("/run/user/%s", u.Uid)
 		test(t, "xdgRuntimeDir", expected)
 	})
