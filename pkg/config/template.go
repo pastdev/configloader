@@ -10,6 +10,7 @@ import (
 
 	"github.com/pastdev/configloader/pkg/bitwarden"
 	"github.com/pastdev/configloader/pkg/lastpass"
+	"github.com/pastdev/configloader/pkg/xdg"
 	"gopkg.in/yaml.v3"
 )
 
@@ -17,6 +18,7 @@ func DefaultFuncMap() map[string]any {
 	funcs := map[string]any{}
 	bitwarden.New().AddFuncs(funcs)
 	lastpass.New().AddFuncs(funcs)
+	xdg.AddFuncs(funcs)
 	return funcs
 }
 
