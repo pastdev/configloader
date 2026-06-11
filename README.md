@@ -82,6 +82,9 @@ import(
 
 The [`github.com/pastdev/pkg/cobra`](./pkg/cobra) package provides CLI integration with [cobra](https://github.com/spf13/cobra).
 There is 1 mandatory, and 2 optional integration points.
+
+### ConfigLoader
+
 First you need to define your [`ConfigLoader`](./pkg/cobra/config.go) object:
 
 ```go
@@ -95,7 +98,32 @@ First you need to define your [`ConfigLoader`](./pkg/cobra/config.go) object:
     }
 ```
 
-Optionally, you can use flags to allow your user to replace the `DefaultSources`:
+Then you can pass the the configloader object to any subcommands and simply call the `.Config()` method to load and access the config object:
+
+```go
+    root.AddCommand(fooCmd(&cfgldr))
+...
+
+func fooCmd(cfgldr *cobraconfig.ConfigLoader[map[any]any]) *cobra.Command {
+    return &cobra.Command{
+        Use:   "foo",
+        Short: `An example subcommand for how to use configloader to show the value of foo.`,
+        RunE: func(_ *cobra.Command, _ []string) error {
+            cfg, err := cfgldr.Config()
+            if err != nil {
+                return fmt.Errorf("get config: %w", err)
+            }
+
+            fmt.Printf("foo is [%s]", (*cfg)["foo"])
+            return nil
+        },
+    }
+}
+```
+
+### Config flags
+
+You can use flags to allow your user to replace the `DefaultSources`:
 
 ```go
     cfg.PersistentFlags(&root).FileSourceVar(
@@ -108,7 +136,33 @@ Optionally, you can use flags to allow your user to replace the `DefaultSources`
         "location of one or more config directories")
 ```
 
-And add a `config` subcommand to your root command for printing out the configuration:
+By default, if the user supplies these flags, they will replace all `DefaultSources`.
+If you prefer to preserve any of the sources so that these flags are merged on top of them, you can mark the source as a `BaseSource`:
+
+```go
+cfgldr := cobraconfig.ConfigLoader[AppConfig]{
+    DefaultSources: config.Sources[AppConfig]{
+        cobraconfig.BaseSource(config.RawSource[AppConfig]{
+            Data: []byte(`
+name: my-app
+port: 8080
+`),
+        }),
+        config.DirSource[AppConfig]{Path: "/etc/my-app.d"},
+        config.DirSource[AppConfig]{Path: "~/.config/my-app.d"},
+    },
+}
+```
+
+In this example:
+
+* the embedded RawSource is always loaded
+* the default config directories are loaded only when no explicit config flags are provided
+* any explicit `--config` or `--config-dir` sources are loaded after the base source and therefore override it
+
+### Config subcommand
+
+You can add a `config` subcommand to your root command for printing out the configuration:
 
 ```go
     cfg.AddSubCommandTo(&root)
@@ -135,27 +189,4 @@ Or a use additional options when adding the subcommand:
             },
         ),
         cobraconfig.WithConfigCommandSilenceUsage[map[any]any](true))
-```
-
-Then you can pass the the configloader object to any subcommands and simply call the `.Config()` method to load and access the config object:
-
-```go
-    root.AddCommand(fooCmd(&cfgldr))
-...
-
-func fooCmd(cfgldr *cobraconfig.ConfigLoader[map[any]any]) *cobra.Command {
-    return &cobra.Command{
-        Use:   "foo",
-        Short: `An example subcommand for how to use configloader to show the value of foo.`,
-        RunE: func(_ *cobra.Command, _ []string) error {
-            cfg, err := cfgldr.Config()
-            if err != nil {
-                return fmt.Errorf("get config: %w", err)
-            }
-
-            fmt.Printf("foo is [%s]", (*cfg)["foo"])
-            return nil
-        },
-    }
-}
 ```
