@@ -48,15 +48,23 @@ func (c *ConfigLoader[T]) Config() (*T, error) {
 // then the DefaultSources will be ignored. Otherwise, configurationis loaded
 // from the DefaultSources.
 func (c *ConfigLoader[T]) load() error {
-	sources := c.sources
-	if len(sources) == 0 {
+	var sources config.Sources[T]
+
+	if len(c.sources) == 0 {
 		sources = c.DefaultSources
+	} else {
+		for _, src := range c.DefaultSources {
+			if isBaseSource(src) {
+				sources = append(sources, src)
+			}
+		}
+		sources = append(sources, c.sources...)
 	}
 
-	err := sources.Load(&c.config)
-	if err != nil {
+	if err := sources.Load(&c.config); err != nil {
 		return fmt.Errorf("configloader load sources: %w", err)
 	}
+
 	return nil
 }
 
