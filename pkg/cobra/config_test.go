@@ -1,3 +1,4 @@
+//nolint:goconst // in tests seeing the explict value in location is better
 package cobra
 
 import (
@@ -30,11 +31,11 @@ func TestPersistentFlags(t *testing.T) {
 		for name, contents := range files {
 			fullPath := filepath.Join(root, filepath.FromSlash(name))
 
-			if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(fullPath), 0o700); err != nil {
 				t.Fatalf("mkdir %q: %v", filepath.Dir(fullPath), err)
 			}
 
-			if err := os.WriteFile(fullPath, []byte(contents), 0o644); err != nil {
+			if err := os.WriteFile(fullPath, []byte(contents), 0o600); err != nil {
 				t.Fatalf("write %q: %v", fullPath, err)
 			}
 		}
