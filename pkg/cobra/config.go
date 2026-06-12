@@ -44,7 +44,7 @@ func (c *ConfigLoader[T]) Config() (*T, error) {
 		for _, o := range c.overrides {
 			err := o.apply(&c.config)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("config loader override: %w", err)
 			}
 		}
 		c.loaded = true

@@ -72,30 +72,35 @@ func TestAddOverride(t *testing.T) {
 			},
 		}
 
-		pf := loader.PersistentFlags(root)
-		pf.FileSourceVarP(
+		loader.PersistentFlags(root).FileSourceVarP(
 			unmarshal,
 			"config",
 			"c",
-			"location of one or more config files",
-		)
-
-		name := AddOverride(loader, func(v string, cfg *Cfg) error {
-			cfg.Name = v
-			return nil
-		})
-		port := AddOverride(loader, func(v int, cfg *Cfg) error {
-			cfg.Port = v
-			return nil
-		})
-		enabled := AddOverride(loader, func(v bool, cfg *Cfg) error {
-			cfg.Enabled = v
-			return nil
-		})
-
-		root.PersistentFlags().StringVar(name, "name", "", "override name")
-		root.PersistentFlags().IntVar(port, "port", 0, "override port")
-		root.PersistentFlags().BoolVar(enabled, "enabled", false, "override enabled")
+			"location of one or more config files")
+		loader.OverrideFlags(root).String(
+			func(v string, cfg *Cfg) error {
+				cfg.Name = v
+				return nil
+			},
+			"name",
+			"",
+			"override name")
+		loader.OverrideFlags(root).Int(
+			func(v int, cfg *Cfg) error {
+				cfg.Port = v
+				return nil
+			},
+			"port",
+			0,
+			"override port")
+		loader.OverrideFlags(root).Bool(
+			func(v bool, cfg *Cfg) error {
+				cfg.Enabled = v
+				return nil
+			},
+			"enabled",
+			false,
+			"override enabled")
 
 		oldWD, err := os.Getwd()
 		if err != nil {
@@ -118,6 +123,28 @@ func TestAddOverride(t *testing.T) {
 			t.Fatalf("got %+v, want %+v", got, expected)
 		}
 	}
+
+	t.Run("override one flag from explicit config", func(t *testing.T) {
+		tester(
+			t,
+			map[string]string{
+				"config.yml": `
+name: from-file
+port: 9090
+enabled: false
+`,
+			},
+			[]string{
+				"--config", "config.yml",
+				"--name", "from-flag",
+			},
+			Cfg{
+				Name:    "from-flag",
+				Port:    9090,
+				Enabled: false,
+			},
+		)
+	})
 
 	t.Run("override flags overlay loaded config", func(t *testing.T) {
 		tester(
