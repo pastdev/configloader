@@ -160,6 +160,49 @@ In this example:
 * the default config directories are loaded only when no explicit config flags are provided
 * any explicit `--config` or `--config-dir` sources are loaded after the base source and therefore override it
 
+### Flag value overrides
+
+You can also bind ordinary cobra flags directly to config overrides.
+This is useful when you want to load config from files first, then let explicit CLI flags overlay specific values.
+
+```go
+type AppConfig struct {
+    Log struct {
+        Level string `yaml:"level"`
+    } `yaml:"log"`
+    Port int `yaml:"port"`
+}
+
+cfgldr := cobraconfig.ConfigLoader[AppConfig]{
+    DefaultSources: config.Sources[AppConfig]{
+        config.FileSource[AppConfig]{Path: "/etc/my-app.yml"},
+    },
+}
+
+root.PersistentFlags().StringVar(
+    cobraconfig.AddOverride(&cfgldr, func(v string, cfg *AppConfig) error {
+        cfg.Log.Level = v
+        return nil
+    }),
+    "log-level",
+    "info",
+    "log level")
+root.PersistentFlags().IntVar(
+    cobraconfig.AddOverride(&cfgldr, func(v int, cfg *AppConfig) error {
+        cfg.Port = v
+        return nil
+    }),
+    "port",
+    8080,
+    "listen port")
+```
+
+When `cfgldr.Config()` is called:
+
+* configuration sources are loaded and merged
+* override values populated by flags are applied to the loaded config
+* the final merged config is returned
+
 ### Config subcommand
 
 You can add a `config` subcommand to your root command for printing out the configuration:

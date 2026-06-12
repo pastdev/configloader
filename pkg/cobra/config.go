@@ -28,6 +28,7 @@ type ConfigLoader[T any] struct {
 	// for the flags to replace at runtime.
 	DefaultSources config.Sources[T]
 	loaded         bool
+	overrides      []configOverride[T]
 	sources        config.Sources[T]
 }
 
@@ -38,6 +39,13 @@ func (c *ConfigLoader[T]) Config() (*T, error) {
 		err := c.load()
 		if err != nil {
 			return nil, err
+		}
+
+		for _, o := range c.overrides {
+			err := o.apply(&c.config)
+			if err != nil {
+				return nil, fmt.Errorf("config loader override: %w", err)
+			}
 		}
 		c.loaded = true
 	}
