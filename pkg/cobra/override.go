@@ -15,28 +15,26 @@ type override[T any, C any] struct {
 	changed func() bool
 }
 
-type overrideFlags[C any] struct {
+type OverrideFlags[C any] struct {
 	config *ConfigLoader[C]
 	flags  *pflag.FlagSet
 }
 
-//nolint:revive // intentionally forcing explicit pattern of invocation similar to cobra.Command
-func (c *ConfigLoader[C]) OverrideFlags(cmd *cobra.Command) *overrideFlags[C] {
-	return &overrideFlags[C]{
+func (c *ConfigLoader[C]) OverrideFlags(cmd *cobra.Command) *OverrideFlags[C] {
+	return &OverrideFlags[C]{
 		config: c,
 		flags:  cmd.Flags(),
 	}
 }
 
-//nolint:revive // intentionally forcing explicit pattern of invocation similar to cobra.Command
-func (c *ConfigLoader[C]) PersistentOverrideFlags(cmd *cobra.Command) *overrideFlags[C] {
-	return &overrideFlags[C]{
+func (c *ConfigLoader[C]) PersistentOverrideFlags(cmd *cobra.Command) *OverrideFlags[C] {
+	return &OverrideFlags[C]{
 		config: c,
 		flags:  cmd.PersistentFlags(),
 	}
 }
 
-func (o *overrideFlags[C]) String(
+func (o *OverrideFlags[C]) String(
 	f func(string, *C) error,
 	name string,
 	value string,
@@ -55,7 +53,7 @@ func (o *override[T, C]) apply(cfg *C) error {
 	return o.f(o.v, cfg)
 }
 
-func (o *overrideFlags[C]) StringP(
+func (o *OverrideFlags[C]) StringP(
 	f func(string, *C) error,
 	name string,
 	shorthand string,
@@ -67,7 +65,7 @@ func (o *overrideFlags[C]) StringP(
 	}, f)
 }
 
-func (o *overrideFlags[C]) Int(
+func (o *OverrideFlags[C]) Int(
 	f func(int, *C) error,
 	name string,
 	value int,
@@ -78,7 +76,7 @@ func (o *overrideFlags[C]) Int(
 	}, f)
 }
 
-func (o *overrideFlags[C]) IntP(
+func (o *OverrideFlags[C]) IntP(
 	f func(int, *C) error,
 	name string,
 	shorthand string,
@@ -90,7 +88,7 @@ func (o *overrideFlags[C]) IntP(
 	}, f)
 }
 
-func (o *overrideFlags[C]) Bool(
+func (o *OverrideFlags[C]) Bool(
 	f func(bool, *C) error,
 	name string,
 	value bool,
@@ -101,7 +99,7 @@ func (o *overrideFlags[C]) Bool(
 	}, f)
 }
 
-func (o *overrideFlags[C]) BoolP(
+func (o *OverrideFlags[C]) BoolP(
 	f func(bool, *C) error,
 	name string,
 	shorthand string,
