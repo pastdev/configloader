@@ -4,22 +4,25 @@ import (
 	"fmt"
 )
 
-type RawSource[T any] struct {
+type RawSource struct {
 	Data []byte
-	// Unmarshal is the function to unmarshal the data from the file into the
-	// cfg object. If not specified YamlUnmarshal will be used.
-	Unmarshal func(b []byte, cfg *T) error
+	// Unmarshal is the function to unmarshal the data from supplied byte slice.
+	// If not specified YamlUnmarshal will be used.
+	Unmarshal func(b []byte, cfg any) error
 }
 
-func (s RawSource[T]) Load(cfg *T) error {
-	err := unmarshal(s.Data, cfg, s.Unmarshal)
+func (s RawSource) Load(merge Merger) error {
+	var doc any
+	err := unmarshal(s.Data, &doc, s.Unmarshal)
 	if err != nil {
 		return fmt.Errorf("load from raw: %w", err)
 	}
 
+	merge(doc)
+
 	return nil
 }
 
-func (s RawSource[T]) String() string {
+func (s RawSource) String() string {
 	return "rawsource"
 }

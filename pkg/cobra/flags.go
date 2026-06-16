@@ -11,14 +11,14 @@ type flags[T any] struct {
 	root   *cobra.Command
 }
 
-type sourcesValue[T any] struct {
-	sources *config.Sources[T]
-	factory func(string) config.SourceLoader[T]
+type sourcesValue struct {
+	sources *[]config.SourceLoader
+	factory func(string) config.SourceLoader
 }
 
 // DirSourceVar calls DirSourceVarP without a shorthand flag.
 func (f *flags[T]) DirSourceVar(
-	unmarshal func(b []byte, cfg *T) error,
+	unmarshal func(b []byte, cfg any) error,
 	name string,
 	usage string,
 ) {
@@ -29,14 +29,14 @@ func (f *flags[T]) DirSourceVar(
 // specified folder. This file iteration is not recursive. The supplied
 // unmarshal func will be used to parse the files.
 func (f *flags[T]) DirSourceVarP(
-	unmarshal func(b []byte, cfg *T) error,
+	unmarshal func(b []byte, cfg any) error,
 	name string,
 	shorthand string,
 	usage string,
 ) {
 	f.SourceVarP(
-		func(path string) config.SourceLoader[T] {
-			return config.DirSource[T]{
+		func(path string) config.SourceLoader {
+			return config.DirSource{
 				Path:      path,
 				Unmarshal: unmarshal,
 			}
@@ -48,7 +48,7 @@ func (f *flags[T]) DirSourceVarP(
 
 // FileSourceVar calls FileSourceVarP without a shorthand flag.
 func (f *flags[T]) FileSourceVar(
-	unmarshal func(b []byte, cfg *T) error,
+	unmarshal func(b []byte, cfg any) error,
 	name string,
 	usage string,
 ) {
@@ -58,14 +58,14 @@ func (f *flags[T]) FileSourceVar(
 // FileSourceVarP will add a source loader that will read the specified file.
 // The supplied unmarshal func will be used to parse the file.
 func (f *flags[T]) FileSourceVarP(
-	unmarshal func(b []byte, cfg *T) error,
+	unmarshal func(b []byte, cfg any) error,
 	name string,
 	shorthand string,
 	usage string,
 ) {
 	f.SourceVarP(
-		func(path string) config.SourceLoader[T] {
-			return config.FileSource[T]{
+		func(path string) config.SourceLoader {
+			return config.FileSource{
 				Path:      path,
 				Unmarshal: unmarshal,
 			}
@@ -77,7 +77,7 @@ func (f *flags[T]) FileSourceVarP(
 
 // SourceVar calls SourceVarP without a shorthand flag.
 func (f *flags[T]) SourceVar(
-	factory func(string) config.SourceLoader[T],
+	factory func(string) config.SourceLoader,
 	name string,
 	usage string,
 ) {
@@ -86,12 +86,16 @@ func (f *flags[T]) SourceVar(
 
 // SourceVarP will add a source loader defined by the supplied factory function.
 func (f *flags[T]) SourceVarP(
-	factory func(string) config.SourceLoader[T],
+	factory func(string) config.SourceLoader,
 	name string,
 	shorthand string,
 	usage string,
 ) {
-	f.root.PersistentFlags().VarP(newSourcesValue(nil, &f.config.sources, factory), name, shorthand, usage)
+	f.root.PersistentFlags().VarP(
+		newSourcesValue(nil, &f.config.sources, factory),
+		name,
+		shorthand,
+		usage)
 }
 
 // String implements [pflag.Value]. This method is only used for defaults, but
@@ -102,14 +106,14 @@ func (f *flags[T]) SourceVarP(
 // provide defaults documentation to their users.
 //
 // [pflag.Value]: https://github.com/spf13/pflag/blob/1c62fb2813da5f1d1b893a49180a41b3f6be3262/flag.go#L200-L204
-func (m *sourcesValue[T]) String() string {
+func (m *sourcesValue) String() string {
 	return ""
 }
 
 // Set implements [pflag.Value].
 //
 // [pflag.Value]: https://github.com/spf13/pflag/blob/1c62fb2813da5f1d1b893a49180a41b3f6be3262/flag.go#L200-L204
-func (m *sourcesValue[T]) Set(v string) error {
+func (m *sourcesValue) Set(v string) error {
 	src := m.factory(v)
 
 	if len(*m.sources) > 0 {
@@ -117,7 +121,7 @@ func (m *sourcesValue[T]) Set(v string) error {
 		*m.sources = append(*m.sources, src)
 	} else {
 		log.Logger.Trace().Stringer("source", src).Msg("initial config source")
-		*m.sources = config.Sources[T]{src}
+		*m.sources = []config.SourceLoader{src}
 	}
 
 	return nil
@@ -126,16 +130,16 @@ func (m *sourcesValue[T]) Set(v string) error {
 // Set implements [pflag.Value].
 //
 // [pflag.Value]: https://github.com/spf13/pflag/blob/1c62fb2813da5f1d1b893a49180a41b3f6be3262/flag.go#L200-L204
-func (*sourcesValue[T]) Type() string {
+func (*sourcesValue) Type() string {
 	return "sources"
 }
 
-func newSourcesValue[T any](
-	val config.Sources[T],
-	p *config.Sources[T],
-	factory func(string) config.SourceLoader[T],
-) *sourcesValue[T] {
-	sv := new(sourcesValue[T])
+func newSourcesValue(
+	val []config.SourceLoader,
+	p *[]config.SourceLoader,
+	factory func(string) config.SourceLoader,
+) *sourcesValue {
+	sv := new(sourcesValue)
 	sv.sources = p
 	*sv.sources = val
 	sv.factory = factory

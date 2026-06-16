@@ -2,6 +2,8 @@
 package config_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,8 +15,9 @@ import (
 )
 
 type LoadTester[T any] struct {
+	Convert func(merged any, cfg *T) error
 	Files   map[string]string
-	Sources config.Sources[T]
+	Sources []config.SourceLoader
 }
 
 func (loader LoadTester[T]) Test(t *testing.T, expected T, actual T) {
@@ -54,31 +57,31 @@ func (loader LoadTester[T]) Test(t *testing.T, expected T, actual T) {
 		require.NoError(t, err)
 	}
 
-	src := config.Sources[T]{}
+	src := []config.SourceLoader{}
 	for _, item := range loader.Sources {
 		switch s := item.(type) {
-		case config.DirSource[T]:
+		case config.DirSource:
 			var path string
 			if strings.HasPrefix(s.Path, "~/") {
 				path = s.Path
 			} else {
 				path = filepath.Join(testDir, s.Path)
 			}
-			src = append(src, config.DirSource[T]{Path: path, Unmarshal: s.Unmarshal})
-		case config.FileSource[T]:
+			src = append(src, config.DirSource{Path: path, Unmarshal: s.Unmarshal})
+		case config.FileSource:
 			var path string
 			if strings.HasPrefix(s.Path, "~/") {
 				path = s.Path
 			} else {
 				path = filepath.Join(testDir, s.Path)
 			}
-			src = append(src, config.FileSource[T]{Path: path, Unmarshal: s.Unmarshal})
-		case config.RawSource[T]:
+			src = append(src, config.FileSource{Path: path, Unmarshal: s.Unmarshal})
+		case config.RawSource:
 			src = append(src, s)
 		}
 	}
 
-	err = src.Load(&actual)
+	err = (config.Sources[T]{Sources: src, Convert: loader.Convert}).Load(&actual)
 	require.NoError(t, err)
 	require.Equal(t, expected, actual)
 }
@@ -90,17 +93,17 @@ func TestLoad(t *testing.T) {
 
 	t.Run("simple memory", func(t *testing.T) {
 		LoadTester[map[any]any]{
-			Sources: config.Sources[map[any]any]{
-				config.RawSource[map[any]any]{Data: []byte(`{"foo":"bar"}`)},
+			Sources: []config.SourceLoader{
+				config.RawSource{Data: []byte(`{"foo":"bar"}`)},
 			},
 		}.Test(t, map[any]any{"foo": "bar"}, map[any]any{})
 	})
 
 	t.Run("memory override", func(t *testing.T) {
 		LoadTester[map[any]any]{
-			Sources: config.Sources[map[any]any]{
-				config.RawSource[map[any]any]{Data: []byte(`{"foo":"bar","hip":"hop"}`)},
-				config.RawSource[map[any]any]{Data: []byte(`{"foo":"baz"}`)},
+			Sources: []config.SourceLoader{
+				config.RawSource{Data: []byte(`{"foo":"bar","hip":"hop"}`)},
+				config.RawSource{Data: []byte(`{"foo":"baz"}`)},
 			},
 		}.Test(t, map[any]any{"foo": "baz", "hip": "hop"}, map[any]any{})
 	})
@@ -108,8 +111,8 @@ func TestLoad(t *testing.T) {
 	t.Run("simple file", func(t *testing.T) {
 		LoadTester[map[any]any]{
 			Files: map[string]string{"config.yml": `{"foo":"bar"}`},
-			Sources: config.Sources[map[any]any]{
-				config.FileSource[map[any]any]{Path: "config.yml"},
+			Sources: []config.SourceLoader{
+				config.FileSource{Path: "config.yml"},
 			},
 		}.Test(t, map[any]any{"foo": "bar"}, map[any]any{})
 	})
@@ -120,9 +123,9 @@ func TestLoad(t *testing.T) {
 				"config.yml":  `{"foo":"bar","hip":"hop"}`,
 				"config2.yml": `{"foo":"baz"}`,
 			},
-			Sources: config.Sources[map[any]any]{
-				config.FileSource[map[any]any]{Path: "config.yml"},
-				config.FileSource[map[any]any]{Path: "config2.yml"},
+			Sources: []config.SourceLoader{
+				config.FileSource{Path: "config.yml"},
+				config.FileSource{Path: "config2.yml"},
 			},
 		}.Test(t, map[any]any{"foo": "baz", "hip": "hop"}, map[any]any{})
 	})
@@ -130,16 +133,16 @@ func TestLoad(t *testing.T) {
 	t.Run("homedir file", func(t *testing.T) {
 		LoadTester[map[any]any]{
 			Files: map[string]string{"~/config.yml": `{"foo":"bar"}`},
-			Sources: config.Sources[map[any]any]{
-				config.FileSource[map[any]any]{Path: "~/config.yml"},
+			Sources: []config.SourceLoader{
+				config.FileSource{Path: "~/config.yml"},
 			},
 		}.Test(t, map[any]any{"foo": "bar"}, map[any]any{})
 	})
 
 	t.Run("missing file", func(t *testing.T) {
 		LoadTester[map[any]any]{
-			Sources: config.Sources[map[any]any]{
-				config.FileSource[map[any]any]{Path: "config.yml"},
+			Sources: []config.SourceLoader{
+				config.FileSource{Path: "config.yml"},
 			},
 		}.Test(t, map[any]any{}, map[any]any{})
 	})
@@ -149,16 +152,16 @@ func TestLoad(t *testing.T) {
 			Files: map[string]string{
 				"config.yml": `{"foo":"bar","hip":"hop"}`,
 			},
-			Sources: config.Sources[map[any]any]{
-				config.FileSource[map[any]any]{Path: "incorrect_name_config.yml"},
+			Sources: []config.SourceLoader{
+				config.FileSource{Path: "incorrect_name_config.yml"},
 			},
 		}.Test(t, map[any]any{}, map[any]any{})
 	})
 
 	t.Run("missing homedir file", func(t *testing.T) {
 		LoadTester[map[any]any]{
-			Sources: config.Sources[map[any]any]{
-				config.FileSource[map[any]any]{Path: "~/config.yml"},
+			Sources: []config.SourceLoader{
+				config.FileSource{Path: "~/config.yml"},
 			},
 		}.Test(t, map[any]any{}, map[any]any{})
 	})
@@ -166,8 +169,8 @@ func TestLoad(t *testing.T) {
 	t.Run("simple dir", func(t *testing.T) {
 		LoadTester[map[any]any]{
 			Files: map[string]string{"app/config.yml": `{"foo":"bar"}`},
-			Sources: config.Sources[map[any]any]{
-				config.DirSource[map[any]any]{Path: "app"},
+			Sources: []config.SourceLoader{
+				config.DirSource{Path: "app"},
 			},
 		}.Test(t, map[any]any{"foo": "bar"}, map[any]any{})
 	})
@@ -178,8 +181,8 @@ func TestLoad(t *testing.T) {
 				"app/config.yml":  `{"foo":"bar","hip":"hop"}`,
 				"app/config2.yml": `{"foo":"baz"}`,
 			},
-			Sources: config.Sources[map[any]any]{
-				config.DirSource[map[any]any]{Path: "app"},
+			Sources: []config.SourceLoader{
+				config.DirSource{Path: "app"},
 			},
 		}.Test(t, map[any]any{"foo": "baz", "hip": "hop"}, map[any]any{})
 	})
@@ -190,9 +193,9 @@ func TestLoad(t *testing.T) {
 				"system/app/config.yml": `{"foo":"bar","hip":"hop"}`,
 				"user/app/config.yml":   `{"foo":"baz"}`,
 			},
-			Sources: config.Sources[map[any]any]{
-				config.DirSource[map[any]any]{Path: "system/app"},
-				config.DirSource[map[any]any]{Path: "user/app"},
+			Sources: []config.SourceLoader{
+				config.DirSource{Path: "system/app"},
+				config.DirSource{Path: "user/app"},
 			},
 		}.Test(t, map[any]any{"foo": "baz", "hip": "hop"}, map[any]any{})
 	})
@@ -209,8 +212,8 @@ func TestLoad(t *testing.T) {
 				"app/config.yml":  `{"not_foo":"bar","not_hip":"hop"}`,
 				"app/config2.yml": `{"not_foo":"baz"}`,
 			},
-			Sources: config.Sources[cfg]{
-				config.DirSource[cfg]{Path: "app"},
+			Sources: []config.SourceLoader{
+				config.DirSource{Path: "app"},
 			},
 		}.Test(t, cfg{Foo: "baz", Hip: "hop"}, actual)
 	})
@@ -227,10 +230,155 @@ func TestLoad(t *testing.T) {
 				"app/config.yml":   `{"not_foo":"bar","not_hip":"hop"}`,
 				"other/config.yml": `{"not_foo":"baz"}`,
 			},
-			Sources: config.Sources[cfg]{
-				config.DirSource[cfg]{Path: "app"},
-				config.FileSource[cfg]{Path: "other/config.yml"},
+			Sources: []config.SourceLoader{
+				config.DirSource{Path: "app"},
+				config.FileSource{Path: "other/config.yml"},
 			},
 		}.Test(t, cfg{Foo: "baz", Hip: "hop"}, actual)
+	})
+
+	// Regression test: when overlaying config sources, updating a nested field
+	// in a map[string]struct value should not replace the whole map entry.
+	t.Run("nested map value struct override", func(t *testing.T) {
+		type user struct {
+			Name  string `yaml:"name"`
+			Shell string `yaml:"shell"`
+		}
+		type app struct {
+			User user `yaml:"user"`
+		}
+		type cfg struct {
+			Apps map[string]app `yaml:"apps"`
+		}
+
+		var actual cfg
+
+		LoadTester[cfg]{
+			Sources: []config.SourceLoader{
+				config.RawSource{
+					Data: []byte(`---
+apps:
+  default:
+    user:
+      name: me
+      shell: /bin/bash
+`),
+				},
+				config.RawSource{
+					Data: []byte(`---
+apps:
+  default:
+    user:
+      name: not_me
+`),
+				},
+			},
+		}.Test(t,
+			cfg{
+				Apps: map[string]app{
+					"default": {
+						User: user{
+							Name:  "not_me",
+							Shell: "/bin/bash",
+						},
+					},
+				},
+			},
+			actual,
+		)
+	})
+
+	t.Run("custom convert with json tags", func(t *testing.T) {
+		type cfg struct {
+			Foo string `json:"not_foo"`
+			Hip string `json:"not_hip"`
+		}
+		var actual cfg
+
+		LoadTester[cfg]{
+			Convert: func(merged any, cfg *cfg) error {
+				data, err := json.Marshal(merged)
+				if err != nil {
+					return fmt.Errorf("json marshal: %w", err)
+				}
+				return json.Unmarshal(data, cfg)
+			},
+			Sources: []config.SourceLoader{
+				config.RawSource{
+					Data:      []byte(`{"not_foo":"bar","not_hip":"hop"}`),
+					Unmarshal: json.Unmarshal,
+				},
+				config.RawSource{
+					Data:      []byte(`{"not_foo":"baz"}`),
+					Unmarshal: json.Unmarshal,
+				},
+			},
+		}.Test(t, cfg{Foo: "baz", Hip: "hop"}, actual)
+	})
+
+	t.Run("custom convert with nested map json tags", func(t *testing.T) {
+		type user struct {
+			Name  string `json:"name"`
+			Shell string `json:"shell"`
+		}
+		type app struct {
+			User user `json:"user"`
+		}
+		type cfg struct {
+			Apps map[string]app `json:"apps"`
+		}
+
+		var actual cfg
+
+		LoadTester[cfg]{
+			Convert: func(merged any, cfg *cfg) error {
+				data, err := json.Marshal(merged)
+				if err != nil {
+					return fmt.Errorf("json marshal: %w", err)
+				}
+				return json.Unmarshal(data, cfg)
+			},
+			Sources: []config.SourceLoader{
+				config.RawSource{
+					Data:      []byte(`{"apps":{"default":{"user":{"name":"me","shell":"/bin/bash"}}}}`),
+					Unmarshal: json.Unmarshal,
+				},
+				config.RawSource{
+					Data:      []byte(`{"apps":{"default":{"user":{"name":"not_me"}}}}`),
+					Unmarshal: json.Unmarshal,
+				},
+			},
+		}.Test(t,
+			cfg{
+				Apps: map[string]app{
+					"default": {
+						User: user{
+							Name:  "not_me",
+							Shell: "/bin/bash",
+						},
+					},
+				},
+			},
+			actual,
+		)
+	})
+
+	t.Run("non string yaml keys are stringified", func(t *testing.T) {
+		LoadTester[map[string]any]{
+			Sources: []config.SourceLoader{
+				config.RawSource{
+					Data: []byte(`---
+1: one
+true: two
+`),
+				},
+			},
+		}.Test(t,
+			map[string]any{
+				"1":    "one",
+				"true": "two",
+			},
+			map[string]any{},
+		)
 	})
 }

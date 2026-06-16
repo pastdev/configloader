@@ -12,7 +12,7 @@ import (
 )
 
 func TestYamlValueTemplateUnmarshal(t *testing.T) {
-	unmarshal := config.YamlValueTemplateUnmarshal[map[any]any](
+	unmarshal := config.YamlValueTemplateUnmarshal(
 		config.NewTemplate(template.FuncMap{
 			"number": strconv.Atoi,
 			"object": func(key, val string) string {
@@ -41,7 +41,7 @@ num: '{{number "1"}}'
 `),
 			&actual)
 		require.NoError(t, err)
-		require.Equal(t, map[any]any{"num": 1}, actual)
+		require.Equal(t, map[any]any{"num": float64(1)}, actual)
 	})
 
 	t.Run("creds", func(t *testing.T) {
@@ -62,5 +62,14 @@ creds:
 				},
 			},
 			actual)
+	})
+
+	t.Run("root scalar", func(t *testing.T) {
+		var actual any
+		err := unmarshal(
+			[]byte(`'{{number "1"}}'`),
+			&actual)
+		require.NoError(t, err)
+		require.Equal(t, float64(1), actual)
 	})
 }
