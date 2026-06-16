@@ -12,14 +12,14 @@ import (
 // DirSource is a directory containing config files to load. The files within
 // the directory will be processed in order, sorted by filename, with later
 // values overriding existing values.
-type DirSource[T any] struct {
+type DirSource struct {
 	Path string
-	// Unmarshal is the function to unmarshal the data from each file into the
-	// cfg object. If not specified YamlUnmarshal will be used.
-	Unmarshal func(b []byte, cfg *T) error
+	// Unmarshal is the function to unmarshal the data from each file in the
+	// directory. If not specified YamlUnmarshal will be used.
+	Unmarshal func(b []byte, cfg any) error
 }
 
-func (s DirSource[T]) Load(cfg *T) error {
+func (s DirSource) Load(merge Merger) error {
 	dir := normalizePath(s.Path)
 	listing, err := os.ReadDir(dir)
 	if err != nil {
@@ -68,16 +68,19 @@ func (s DirSource[T]) Load(cfg *T) error {
 		}
 
 		files.Str(file)
-		err = unmarshal(b, cfg, s.Unmarshal)
+		var doc any
+		err = unmarshal(b, &doc, s.Unmarshal)
 		if err != nil {
 			return fmt.Errorf("load from dir: %w", err)
 		}
+
+		merge(doc)
 	}
 
 	log.Logger.Debug().Str("dir", s.Path).Array("files", files).Msg("loaded dirsource config")
 	return nil
 }
 
-func (s DirSource[T]) String() string {
+func (s DirSource) String() string {
 	return fmt.Sprintf("dirsource:%s", s.Path)
 }

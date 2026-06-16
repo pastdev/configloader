@@ -2,24 +2,24 @@ package cobra
 
 import "github.com/pastdev/configloader/pkg/config"
 
-type BaseSourceLoader[T any] interface {
-	config.SourceLoader[T]
+type BaseSourceLoader interface {
+	config.SourceLoader
 	BaseSourceLoader()
 }
 
-type baseSourceLoader[T any] struct {
-	config.SourceLoader[T]
+type baseSourceLoader struct {
+	config.SourceLoader
 }
 
 // BaseSourceLoader is simply a marker function allowing the isBaseSource to
 // determine if this is should be treated as a _base_ source.
-func (baseSourceLoader[T]) BaseSourceLoader() {}
+func (baseSourceLoader) BaseSourceLoader() {}
 
-func BaseSource[T any](src config.SourceLoader[T]) config.SourceLoader[T] {
-	return baseSourceLoader[T]{SourceLoader: src}
+func BaseSource(src config.SourceLoader) config.SourceLoader {
+	return baseSourceLoader{SourceLoader: src}
 }
 
-func isBaseSource[T any](src config.SourceLoader[T]) bool {
-	_, ok := src.(BaseSourceLoader[T])
+func isBaseSource(src config.SourceLoader) bool {
+	_, ok := src.(BaseSourceLoader)
 	return ok
 }

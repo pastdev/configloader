@@ -19,9 +19,7 @@ func TestAddOverride(t *testing.T) {
 		Enabled bool   `yaml:"enabled"`
 	}
 
-	unmarshal := func(b []byte, cfg *Cfg) error {
-		return yaml.Unmarshal(b, cfg)
-	}
+	unmarshal := yaml.Unmarshal
 
 	writeTestFS := func(t *testing.T, files map[string]string) string {
 		t.Helper()
@@ -195,9 +193,7 @@ func TestPersistentFlags(t *testing.T) {
 		Enabled bool   `yaml:"enabled"`
 	}
 
-	unmarshal := func(b []byte, cfg *Cfg) error {
-		return yaml.Unmarshal(b, cfg)
-	}
+	unmarshal := yaml.Unmarshal
 
 	writeTestFS := func(t *testing.T, files map[string]string) string {
 		t.Helper()
@@ -230,8 +226,8 @@ func TestPersistentFlags(t *testing.T) {
 
 		testDir := writeTestFS(t, testFiles)
 
-		var defaultSource config.SourceLoader[Cfg]
-		defaultSource = config.RawSource[Cfg]{
+		var defaultSource config.SourceLoader
+		defaultSource = config.RawSource{
 			Data: []byte(`
 name: default
 port: 8080
@@ -242,7 +238,11 @@ enabled: true
 			defaultSource = BaseSource(defaultSource)
 		}
 
-		loader := &ConfigLoader[Cfg]{DefaultSources: config.Sources[Cfg]{defaultSource}}
+		loader := &ConfigLoader[Cfg]{
+			DefaultSources: config.Sources[Cfg]{
+				Sources: []config.SourceLoader{defaultSource},
+			},
+		}
 
 		var got Cfg
 

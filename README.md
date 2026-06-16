@@ -10,29 +10,72 @@ These source loader instances are aggregated together in a `Sources` object that
 Subsequent sources will merge their values over the top of any existing values so the latest defined wins.
 
 ```go
-    sources := config.Sources[AppConfig]{
-        config.FileSource[AppConfig]{Path: "~/.config/app.yml"},
-        config.DirSource[AppConfig]{Path: "~/.config/app.d"},
-    }
-    sources.Load(&cfg)
+sources := config.Sources[AppConfig]{
+    Sources: []config.SourceLoader{
+        config.FileSource{Path: "~/.config/app.yml"},
+        config.DirSource{Path: "~/.config/app.d"},
+    },
+}
+
+var cfg AppConfig
+if err := sources.Load(&cfg); err != nil {
+    return err
+}
 ```
 
 See the [example](./pkg/config/example_test.go) or [tests](./pkg/config/config_test.go) for more use cases.
 
-### Unmarshaling
+### Merge behavior
 
-By default, `YamlUnmarshal` is used.
-However, you can replace that with a custom unmarshaler if you would like:
+Config is merged as a generic document before conversion into your target type.
+In practice this means:
+
+* maps are merged recursively
+* slices are replaced wholesale
+* scalars overwrite earlier values
+* later sources override earlier sources
+
+This makes nested overlays behave as expected, including inside `map[string]struct`-like configurations.
+
+### Unmarshaling source documents
+
+By default, [`YamlUnmarshal`](./pkg/config/config.go) is used to decode each source into an intermediate document.
+
+You can replace that with a custom unmarshaler if you would like:
 
 ```go
-    sources := config.Sources[AppConfig]{
-        config.FileSource[map[any]any]{
-            Path: "~/.config/configloader.tmpl.d",
-            Unmarshal: func(b []byte, cfg *map[any]any) error {
+sources := config.Sources[map[string]any]{
+    Sources: []config.SourceLoader{
+        config.FileSource{
+            Path: "~/.config/configloader.json",
+            Unmarshal: func(b []byte, cfg any) error {
                 return json.Unmarshal(b, cfg)
             },
         },
-    }
+    },
+}
+```
+
+### Converting the merged document
+
+After all source documents are merged, the result is converted into your target config object.
+
+By default, [`YamlConvert`](./pkg/config/config.go) is used.
+You can replace it if you want different final conversion behavior, for example to respect json tags or UnmarshalJSON methods:
+
+```go
+sources := config.Sources[AppConfig]{
+    Sources: []config.SourceLoader{
+        config.FileSource{Path: "~/.config/app.json"},
+    },
+    Convert: func(merged any, cfg *AppConfig) error {
+        data, err := json.Marshal(merged)
+        if err != nil {
+            return err
+        }
+        return json.Unmarshal(data, cfg)
+    },
+}
 ```
 
 ### Templating
@@ -40,17 +83,30 @@ However, you can replace that with a custom unmarshaler if you would like:
 You can also configure your source loaders to pre-process config file values with the go templating engine:
 
 ```go
-    sources := config.Sources[AppConfig]{
-        config.FileSource[AppConfig]{
+sources := config.Sources[AppConfig]{
+    Sources: []config.SourceLoader{
+        config.FileSource{
             Path: "/etc/configloader.tmpl.yml",
-            Unmarshal: config.
-                YamlValueTemplateUnmarshal[AppConfig](
-                    config.NewTemplate(config.DefaultFuncMap()))
+            Unmarshal: config.YamlValueTemplateUnmarshal(
+                config.NewTemplate(config.DefaultFuncMap())),
         },
-    }
+    },
+}
 ```
 
-The `config.DefaultFuncMap()` contains utility functions for accessing secrets from various password managers (ie: [lastpass](#lastpass), [bitwarden](#bitwarden)).
+`YamlValueTemplateUnmarshal` is intended for document-style destinations such as:
+
+* `*any`
+* `*map[any]any`
+* `*map[string]any`
+* `*[]any`
+
+The `config.DefaultFuncMap()` contains utility functions for accessing secrets from various password managers and XDG helpers, including:
+
+* [bitwarden](#bitwarden)
+* [lastpass](#lastpass)
+* [xdg](#xdg)
+
 This map can be added to, or replaced.
 
 #### Bitwarden
@@ -63,19 +119,62 @@ The template functions assume you have an _active session_ (ie: `rbw unlock`) fr
 To use the lastpass template functions, you need to install the [`lastpass-cli`](https://github.com/lastpass/lastpass-cli) client.
 The template functions assume you have an _active session_ (ie: `lpass login <USER>`) from which it will obtain the secrets.
 
+#### XDG
+
+The default template function map also includes XDG helpers:
+
+* `xdgBinHome`
+* `xdgCacheHome`
+* `xdgConfigDirs`
+* `xdgConfigHome`
+* `xdgDataDirs`
+* `xdgDataHome`
+* `xdgStateHome`
+* `xdgRuntimeDir`
+
+These functions follow the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/latest/) behavior:
+
+* if the corresponding `XDG_*` environment variable is set and non-empty, that value is used
+* otherwise the spec-defined default is used
+* for values whose default depends on the user's home directory or current user, an optional fallback may be supplied and is used only if that default cannot be determined
+
+Examples:
+
+```gotemplate
+{{ xdgConfigHome }}
+{{ xdgConfigHome "/tmp/my-app-config" }}
+{{ xdgRuntimeDir "/tmp/my-app-runtime" }}
+```
+
+For example, `xdgConfigHome` behaves like this:
+
+* use `XDG_CONFIG_HOME` if it is set and non-empty
+* otherwise use `$HOME/.config`
+* if `$HOME` cannot be determined, use the supplied fallback if one was provided
+* otherwise return an error
+
+For `xdgConfigDirs` and `xdgDataDirs`, the spec defaults are fixed values, so fallbacks are generally unnecessary.
+
 ## pkg/log
 
 This library uses [`zerolog`](https://github.com/rs/zerolog) for logging.
 The `Logger` can be set by consumers as follows:
 
 ```go
-import(
+import (
+    "os"
+
     "github.com/pastdev/configloader/pkg/log"
+    "github.com/rs/zerolog"
 )
 
 ...
 
-    log.Logger = zerolog.New(os.Stderr).Level(zerolog.TraceLevel).With().Timestamp().Logger()
+    log.Logger = zerolog.New(os.Stderr).
+        Level(zerolog.TraceLevel).
+        With().
+        Timestamp().
+        Logger()
 ```
 
 ## pkg/cobra
@@ -88,33 +187,36 @@ There is 1 mandatory, and 2 optional integration points.
 First you need to define your [`ConfigLoader`](./pkg/cobra/config.go) object:
 
 ```go
-    cfgldr := cobraconfig.ConfigLoader[map[any]any]{
-        DefaultSources: config.Sources[map[any]any]{
-            config.FileSource[map[any]any]{Path: "/etc/configloader.yml"},
-            config.DirSource[map[any]any]{Path: "/etc/configloader.d"},
-            config.FileSource[map[any]any]{Path: "~/.config/configloader.yml"},
-            config.DirSource[map[any]any]{Path: "~/.config/configloader.d"},
+    cfgldr := cobraconfig.ConfigLoader[map[string]any]{
+        DefaultSources: config.Sources[map[string]any]{
+            Sources: []config.SourceLoader{
+                config.FileSource{Path: "/etc/configloader.yml"},
+                config.DirSource{Path: "/etc/configloader.d"},
+                config.FileSource{Path: "~/.config/configloader.yml"},
+                config.DirSource{Path: "~/.config/configloader.d"},
+            },
         },
     }
 ```
 
-Then you can pass the the configloader object to any subcommands and simply call the `.Config()` method to load and access the config object:
+You can then pass the config loader to subcommands and call `.Config()` to load and access the config object:
 
 ```go
     root.AddCommand(fooCmd(&cfgldr))
+
 ...
 
-func fooCmd(cfgldr *cobraconfig.ConfigLoader[map[any]any]) *cobra.Command {
+func fooCmd(cfgldr *cobraconfig.ConfigLoader[map[string]any]) *cobra.Command {
     return &cobra.Command{
         Use:   "foo",
-        Short: `An example subcommand for how to use configloader to show the value of foo.`,
+        Short: `Show the value of foo.`,
         RunE: func(_ *cobra.Command, _ []string) error {
             cfg, err := cfgldr.Config()
             if err != nil {
                 return fmt.Errorf("get config: %w", err)
             }
 
-            fmt.Printf("foo is [%s]", (*cfg)["foo"])
+            fmt.Printf("foo is [%v]\n", (*cfg)["foo"])
             return nil
         },
     }
@@ -126,37 +228,40 @@ func fooCmd(cfgldr *cobraconfig.ConfigLoader[map[any]any]) *cobra.Command {
 You can use flags to allow your user to replace the `DefaultSources`:
 
 ```go
-    cfg.PersistentFlags(&root).FileSourceVar(
-        config.YamlUnmarshal[map[any]any](),
+    cfgldr.PersistentFlags(&root).FileSourceVar(
+        config.YamlUnmarshal(),
         "config",
         "location of one or more config files")
-    cfg.PersistentFlags(&root).DirSourceVar(
-        config.YamlUnmarshal[map[any]any](),
+    
+    cfgldr.PersistentFlags(&root).DirSourceVar(
+        config.YamlUnmarshal(),
         "config-dir",
         "location of one or more config directories")
 ```
 
 By default, if the user supplies these flags, they will replace all `DefaultSources`.
-If you prefer to preserve any of the sources so that these flags are merged on top of them, you can mark the source as a `BaseSource`:
+If you want to preserve some defaults and overlay user-supplied sources on top of them, mark those defaults as `BaseSource`:
 
 ```go
-cfgldr := cobraconfig.ConfigLoader[AppConfig]{
-    DefaultSources: config.Sources[AppConfig]{
-        cobraconfig.BaseSource(config.RawSource[AppConfig]{
-            Data: []byte(`
+    cfgldr := cobraconfig.ConfigLoader[AppConfig]{
+        DefaultSources: config.Sources[AppConfig]{
+            Sources: []config.SourceLoader{
+                cobraconfig.BaseSource(config.RawSource{
+                    Data: []byte(`
 name: my-app
 port: 8080
 `),
-        }),
-        config.DirSource[AppConfig]{Path: "/etc/my-app.d"},
-        config.DirSource[AppConfig]{Path: "~/.config/my-app.d"},
-    },
-}
+                }),
+                config.DirSource{Path: "/etc/my-app.d"},
+                config.DirSource{Path: "~/.config/my-app.d"},
+            },
+        },
+    }
 ```
 
 In this example:
 
-* the embedded RawSource is always loaded
+* the embedded `RawSource` is always loaded
 * the default config directories are loaded only when no explicit config flags are provided
 * any explicit `--config` or `--config-dir` sources are loaded after the base source and therefore override it
 
@@ -173,28 +278,35 @@ type AppConfig struct {
     Port int `yaml:"port"`
 }
 
-cfgldr := cobraconfig.ConfigLoader[AppConfig]{
-    DefaultSources: config.Sources[AppConfig]{
-        config.FileSource[AppConfig]{Path: "/etc/my-app.yml"},
-    },
-}
+...
 
-root.PersistentFlags().StringVar(
-    cobraconfig.AddOverride(&cfgldr, func(v string, cfg *AppConfig) error {
-        cfg.Log.Level = v
-        return nil
-    }),
-    "log-level",
-    "info",
-    "log level")
-root.PersistentFlags().IntVar(
-    cobraconfig.AddOverride(&cfgldr, func(v int, cfg *AppConfig) error {
-        cfg.Port = v
-        return nil
-    }),
-    "port",
-    8080,
-    "listen port")
+    cfgldr := cobraconfig.ConfigLoader[AppConfig]{
+        DefaultSources: config.Sources[AppConfig]{
+            Sources: []config.SourceLoader{
+                config.FileSource{Path: "/etc/my-app.yml"},
+            },
+        },
+    }
+    
+    cfgldr.OverrideFlags(&root).String(
+        func(v string, cfg *AppConfig) error {
+            cfg.Log.Level = v
+            return nil
+        },
+        "log-level",
+        "",
+        "log level",
+    )
+    
+    cfgldr.OverrideFlags(&root).Int(
+        func(v int, cfg *AppConfig) error {
+            cfg.Port = v
+            return nil
+        },
+        "port",
+        0,
+        "listen port",
+    )
 ```
 
 When `cfgldr.Config()` is called:
@@ -218,18 +330,14 @@ Or a use additional options when adding the subcommand:
         &root,
         cobraconfig.WithConfigCommandOutput(
             "json",
-            func(w io.Writer, cfg *map[any]any) error {
-                jsonmap := map[string]any{}
-                for k, v := range *cfg {
-                    jsonmap[fmt.Sprintf("%s", k)] = v
-                }
-
-                err := json.NewEncoder(w).Encode(jsonmap)
+            func(w io.Writer, cfg *map[string]any) error {
+                err := json.NewEncoder(w).Encode(cfg)
                 if err != nil {
                     return fmt.Errorf("format json: %w", err)
                 }
                 return nil
             },
         ),
-        cobraconfig.WithConfigCommandSilenceUsage[map[any]any](true))
+        cobraconfig.WithConfigCommandSilenceUsage[map[string]any](true),
+    )
 ```

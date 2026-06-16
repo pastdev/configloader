@@ -29,7 +29,7 @@ type ConfigLoader[T any] struct {
 	DefaultSources config.Sources[T]
 	loaded         bool
 	overrides      []configOverride[T]
-	sources        config.Sources[T]
+	sources        []config.SourceLoader
 }
 
 // Config returns the generated configuration object that will be loaded by the
@@ -53,20 +53,23 @@ func (c *ConfigLoader[T]) Config() (*T, error) {
 }
 
 // Load loads the configuration. If sources were set using the persistent flags,
-// then the DefaultSources will be ignored. Otherwise, configurationis loaded
-// from the DefaultSources.
+// then the DefaultSources will be ignored except for any marked base sources.
+// The final Convert function is always inherited from DefaultSources unless
+// explicitly replaced by the caller beforehand.
 func (c *ConfigLoader[T]) load() error {
-	var sources config.Sources[T]
+	sources := config.Sources[T]{
+		Convert: c.DefaultSources.Convert,
+	}
 
 	if len(c.sources) == 0 {
 		sources = c.DefaultSources
 	} else {
-		for _, src := range c.DefaultSources {
+		for _, src := range c.DefaultSources.Sources {
 			if isBaseSource(src) {
-				sources = append(sources, src)
+				sources.Sources = append(sources.Sources, src)
 			}
 		}
-		sources = append(sources, c.sources...)
+		sources.Sources = append(sources.Sources, c.sources...)
 	}
 
 	if err := sources.Load(&c.config); err != nil {

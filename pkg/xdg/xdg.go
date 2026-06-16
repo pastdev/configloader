@@ -1,4 +1,4 @@
-// Pachage xdg provides xdg env var with default fallback support see the
+// Package xdg provides xdg env var with default fallback support see the
 // [XDG Base Directory Specification] for details
 //
 // [XDG Base Directory Specification]: https://specifications.freedesktop.org/basedir/latest/
@@ -12,13 +12,33 @@ import (
 	"text/template"
 )
 
-func homePath(subPath string, envVar string) (string, error) {
-	if v, ok := os.LookupEnv(envVar); ok {
+var (
+	osUserHomeDir = os.UserHomeDir
+	userCurrent   = user.Current
+)
+
+func nonEmptyEnv(name string) (string, bool) {
+	v, ok := os.LookupEnv(name)
+	return v, ok && v != ""
+}
+
+func firstFallback(fallback ...string) (string, bool) {
+	if len(fallback) == 0 || fallback[0] == "" {
+		return "", false
+	}
+	return fallback[0], true
+}
+
+func homePath(subPath string, envVar string, fallback ...string) (string, error) {
+	if v, ok := nonEmptyEnv(envVar); ok {
 		return v, nil
 	}
 
-	home, err := os.UserHomeDir()
+	home, err := osUserHomeDir()
 	if err != nil {
+		if v, ok := firstFallback(fallback...); ok {
+			return v, nil
+		}
 		return "", fmt.Errorf("user home dir: %w", err)
 	}
 
@@ -36,8 +56,12 @@ func homePath(subPath string, envVar string) (string, error) {
 //	User-specific executable files may be stored in $HOME/.local/bin.
 //	Distributions should ensure this directory shows up in the UNIX $PATH
 //	environment variable, at an appropriate place.
-func BinHome() (string, error) {
-	return homePath(".local/bin", "XDG_BIN_HOME")
+//
+// If XDG_BIN_HOME is set and non-empty, it is used. Otherwise $HOME/.local/bin
+// is used. If the home directory cannot be determined, the optional fallback is
+// used if supplied.
+func BinHome(fallback ...string) (string, error) {
+	return homePath(".local/bin", "XDG_BIN_HOME", fallback...)
 }
 
 // CacheHome implements the spec for:
@@ -45,8 +69,12 @@ func BinHome() (string, error) {
 //	There is a single base directory relative to which user-specific
 //	non-essential (cached) data should be written. This directory is defined by
 //	the environment variable $XDG_CACHE_HOME.
-func CacheHome() (string, error) {
-	return homePath(".cache", "XDG_CACHE_HOME")
+//
+// If XDG_CACHE_HOME is set and non-empty, it is used. Otherwise $HOME/.cache
+// is used. If the home directory cannot be determined, the optional fallback is
+// used if supplied.
+func CacheHome(fallback ...string) (string, error) {
+	return homePath(".cache", "XDG_CACHE_HOME", fallback...)
 }
 
 // ConfigDirs implements the spec for:
@@ -54,8 +82,11 @@ func CacheHome() (string, error) {
 //	There is a set of preference ordered base directories relative to which
 //	configuration files should be searched. This set of directories is defined
 //	by the environment variable $XDG_CONFIG_DIRS.
-func ConfigDirs() (string, error) {
-	if v, ok := os.LookupEnv("XDG_CONFIG_DIRS"); ok {
+//
+// If XDG_CONFIG_DIRS is set and non-empty, it is used. Otherwise /etc/xdg is
+// used.
+func ConfigDirs(_ ...string) (string, error) {
+	if v, ok := nonEmptyEnv("XDG_CONFIG_DIRS"); ok {
 		return v, nil
 	}
 
@@ -67,8 +98,12 @@ func ConfigDirs() (string, error) {
 //	There is a single base directory relative to which user-specific
 //	configuration files should be written. This directory is defined by the
 //	environment variable $XDG_CONFIG_HOME.
-func ConfigHome() (string, error) {
-	return homePath(".config", "XDG_CONFIG_HOME")
+//
+// If XDG_CONFIG_HOME is set and non-empty, it is used. Otherwise $HOME/.config
+// is used. If the home directory cannot be determined, the optional fallback is
+// used if supplied.
+func ConfigHome(fallback ...string) (string, error) {
+	return homePath(".config", "XDG_CONFIG_HOME", fallback...)
 }
 
 // DataDirs implements the spec for:
@@ -76,8 +111,11 @@ func ConfigHome() (string, error) {
 //	There is a set of preference ordered base directories relative to which
 //	data files should be searched. This set of directories is defined by the
 //	environment variable $XDG_DATA_DIRS.
-func DataDirs() (string, error) {
-	if v, ok := os.LookupEnv("XDG_DATA_DIRS"); ok {
+//
+// If XDG_DATA_DIRS is set and non-empty, it is used. Otherwise
+// /usr/local/share/:/usr/share/ is used.
+func DataDirs(_ ...string) (string, error) {
+	if v, ok := nonEmptyEnv("XDG_DATA_DIRS"); ok {
 		return v, nil
 	}
 
@@ -89,8 +127,12 @@ func DataDirs() (string, error) {
 //	There is a single base directory relative to which user-specific data files
 //	should be written. This directory is defined by the environment variable
 //	$XDG_DATA_HOME.
-func DataHome() (string, error) {
-	return homePath(".local/share", "XDG_DATA_HOME")
+//
+// If XDG_DATA_HOME is set and non-empty, it is used. Otherwise
+// $HOME/.local/share is used. If the home directory cannot be determined, the
+// optional fallback is used if supplied.
+func DataHome(fallback ...string) (string, error) {
+	return homePath(".local/share", "XDG_DATA_HOME", fallback...)
 }
 
 // StateHome implements the spec for:
@@ -98,8 +140,12 @@ func DataHome() (string, error) {
 //	There is a single base directory relative to which user-specific state data
 //	should be written. This directory is defined by the environment variable
 //	$XDG_STATE_HOME.
-func StateHome() (string, error) {
-	return homePath(".local/state", "XDG_STATE_HOME")
+//
+// If XDG_STATE_HOME is set and non-empty, it is used. Otherwise
+// $HOME/.local/state is used. If the home directory cannot be determined, the
+// optional fallback is used if supplied.
+func StateHome(fallback ...string) (string, error) {
+	return homePath(".local/state", "XDG_STATE_HOME", fallback...)
 }
 
 // RuntimeDir implements the spec for:
@@ -107,13 +153,20 @@ func StateHome() (string, error) {
 //	There is a single base directory relative to which user-specific runtime
 //	files and other file objects should be placed. This directory is defined by
 //	the environment variable $XDG_RUNTIME_DIR.
-func RuntimeDir() (string, error) {
-	if v, ok := os.LookupEnv("XDG_RUNTIME_DIR"); ok {
+//
+// If XDG_RUNTIME_DIR is set and non-empty, it is used. Otherwise a best-effort
+// replacement directory is returned. If that cannot be determined, the optional
+// fallback is used if supplied.
+func RuntimeDir(fallback ...string) (string, error) {
+	if v, ok := nonEmptyEnv("XDG_RUNTIME_DIR"); ok {
 		return v, nil
 	}
 
-	u, err := user.Current()
+	u, err := userCurrent()
 	if err != nil {
+		if v, ok := firstFallback(fallback...); ok {
+			return v, nil
+		}
 		return "", fmt.Errorf("current user: %w", err)
 	}
 

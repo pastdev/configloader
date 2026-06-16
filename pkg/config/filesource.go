@@ -8,14 +8,14 @@ import (
 )
 
 // FileSource is a config file to load.
-type FileSource[T any] struct {
+type FileSource struct {
 	Path string
-	// Unmarshal is the function to unmarshal the data from the file into the
-	// cfg object. If not specified YamlUnmarshal will be used.
-	Unmarshal func(b []byte, cfg *T) error
+	// Unmarshal is the function to unmarshal the data from file.
+	// If not specified YamlUnmarshal will be used.
+	Unmarshal func(b []byte, cfg any) error
 }
 
-func (s FileSource[T]) Load(cfg *T) error {
+func (s FileSource) Load(merge Merger) error {
 	b, err := os.ReadFile(normalizePath(s.Path))
 	if err != nil {
 		log.Logger.Debug().Str("file", s.Path).Msg("config not found")
@@ -23,15 +23,18 @@ func (s FileSource[T]) Load(cfg *T) error {
 		return nil
 	}
 
-	err = unmarshal(b, cfg, s.Unmarshal)
+	var doc any
+	err = unmarshal(b, &doc, s.Unmarshal)
 	if err != nil {
 		return fmt.Errorf("load from file: %w", err)
 	}
+
+	merge(doc)
 
 	log.Logger.Debug().Str("file", s.Path).Msg("loaded filesource config")
 	return nil
 }
 
-func (s FileSource[T]) String() string {
+func (s FileSource) String() string {
 	return fmt.Sprintf("filesource:%s", s.Path)
 }

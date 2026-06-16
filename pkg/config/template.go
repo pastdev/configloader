@@ -119,36 +119,62 @@ func walk(callback Executor, node any, keyStack []string) (any, error) {
 	}
 }
 
-// YamlValueTemplateUnmarshal is an Unmarshal function that unmarshals from
-// yaml, then processes each _value_ individually through the go template engine
-// then reserializes the result to yaml before unmarshaling into T.
-func YamlValueTemplateUnmarshal[T any](executor Executor) func(b []byte, cfg *T) error {
-	return func(b []byte, cfg *T) error {
-		var valueMap map[any]any
-		err := yaml.Unmarshal(b, &valueMap)
+// YamlValueTemplateUnmarshal returns an Unmarshal function that unmarshals from
+// yaml, then processes each _value_ individually through the go template engine.
+// The unmarshal function expects to be given a reference to one of:
+//
+//	*any
+//	*map[any]any
+//	*map[string]any
+//	*[]any
+func YamlValueTemplateUnmarshal(executor Executor) func(b []byte, cfg any) error {
+	return func(b []byte, doc any) error {
+		err := yaml.Unmarshal(b, doc)
 		if err != nil {
-			return fmt.Errorf("yamlunmarshal to valueMap: %w", err)
+			return fmt.Errorf("yamlunmarshal: %w", err)
 		}
 
-		if executor == nil {
-			executor = NewTemplate(DefaultFuncMap())
+		exec := executor
+		if exec == nil {
+			exec = NewTemplate(DefaultFuncMap())
 		}
 
-		// walk the map and template each value
-		err = Walk(executor, valueMap)
-		if err != nil {
-			return fmt.Errorf("yamlunmarshal walk valueMap: %w", err)
-		}
+		switch typed := doc.(type) {
+		case *any:
+			// this case uses the internal helper method because it needs to
+			// replace the root of the value in case it was a scalar. all other
+			// cases just replace within the map/slice so no need to replace
+			// root
+			value, err := walk(exec, *typed, []string{})
+			if err != nil {
+				return fmt.Errorf("yamlunmarshal walk valueMap: %w", err)
+			}
+			*typed = value
+			return nil
 
-		data, err := yaml.Marshal(valueMap)
-		if err != nil {
-			return fmt.Errorf("yamlunmarshal from valueMap: %w", err)
-		}
+		case *map[any]any:
+			err := Walk(exec, *typed)
+			if err != nil {
+				return fmt.Errorf("yamlunmarshal walk valueMap: %w", err)
+			}
+			return nil
 
-		err = yaml.Unmarshal(data, cfg)
-		if err != nil {
-			return fmt.Errorf("yamlunmarshal to type: %w", err)
+		case *map[string]any:
+			err := Walk(exec, *typed)
+			if err != nil {
+				return fmt.Errorf("yamlunmarshal walk valueMap: %w", err)
+			}
+			return nil
+
+		case *[]any:
+			err := Walk(exec, *typed)
+			if err != nil {
+				return fmt.Errorf("yamlunmarshal walk valueMap: %w", err)
+			}
+			return nil
+
+		default:
+			return fmt.Errorf("yamlunmarshal unsupported destination type %T", doc)
 		}
-		return nil
 	}
 }

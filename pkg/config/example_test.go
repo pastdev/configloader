@@ -18,14 +18,14 @@ func ExampleSources_Load() {
 	var cfg AppConfig
 
 	sources := config.Sources[AppConfig]{
-		config.RawSource[AppConfig]{
-			Data: []byte(`{"foo":"bar","hip":"hop"}`),
-		},
-		config.RawSource[AppConfig]{
-			Data: []byte(`{"foo":"baz"}`),
-			// can customize unmarshaler, by default its yaml...
-			Unmarshal: func(b []byte, cfg *AppConfig) error {
-				return json.Unmarshal(b, cfg)
+		Sources: []config.SourceLoader{
+			config.RawSource{
+				Data: []byte(`{"foo":"bar","hip":"hop"}`),
+			},
+			config.RawSource{
+				Data: []byte(`{"foo":"baz"}`),
+				// can customize unmarshaler, by default its yaml...
+				Unmarshal: json.Unmarshal,
 			},
 		},
 	}
