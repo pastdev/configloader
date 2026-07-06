@@ -37,6 +37,31 @@ In practice this means:
 
 This makes nested overlays behave as expected, including inside `map[string]struct`-like configurations.
 
+### DirSource file filtering
+
+`DirSource` only considers files that look like config, so it can safely point at a directory that also holds other files (e.g. a git repo root with a README, `.gitignore`, etc.).
+
+By default, only `*.yml` and `*.yaml` files are loaded.
+Subdirectories are always skipped.
+
+You can customize this per-directory by adding a `.configloader` file alongside your config files:
+
+```yaml
+include:
+  - "*.yml"
+  - "*.yaml"
+  - "*.json"
+exclude:
+  - "*.local.yml"
+```
+
+* `include` is a whitelist: if present, it replaces the built-in default entirely, and only files matching one of its patterns are eligible
+* `exclude` is a blacklist: it removes files from whatever `include` (or the default) already selected
+* a file must match `include` **and** not match `exclude` to be loaded — the two lists are independent, not a single ordered gitignore-style list
+* patterns are plain [`filepath.Match`](https://pkg.go.dev/path/filepath#Match) globs matched against the file's base name, not its full path
+* `.configloader` itself is always skipped, and does not need to be valid YAML for merging — it's only read as filter configuration, never passed through the merge step
+* a `.configloader` file that fails to parse causes `Load` to return an error, rather than silently falling back to defaults
+
 ### Unmarshaling source documents
 
 By default, [`YamlUnmarshal`](./pkg/config/config.go) is used to decode each source into an intermediate document.
