@@ -3,7 +3,6 @@ package cobra
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/pastdev/configloader/pkg/config"
@@ -115,7 +114,7 @@ func (c *ConfigLoader[T]) AddSubCommandTo(root *cobra.Command, opts ...ConfigCom
 		Short:        `Print out the config data.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: options.SilenceUsage,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := c.Config()
 			if err != nil {
 				return fmt.Errorf("get config: %w", err)
@@ -126,7 +125,7 @@ func (c *ConfigLoader[T]) AddSubCommandTo(root *cobra.Command, opts ...ConfigCom
 				return fmt.Errorf("undefined formatter: %s", output)
 			}
 
-			err = formatter(os.Stdout, cfg)
+			err = formatter(cmd.OutOrStdout(), cfg)
 			if err != nil {
 				return fmt.Errorf("format config: %w", err)
 			}
