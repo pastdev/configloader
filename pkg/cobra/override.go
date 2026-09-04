@@ -45,7 +45,6 @@ func (o *OverrideFlags[C]) String(
 	}, f)
 }
 
-//nolint:unused // invoked via configOverride interface
 func (o *override[T, C]) apply(cfg *C) error {
 	if o.changed != nil && !o.changed() {
 		return nil
