@@ -41,6 +41,9 @@ func (s Sources[T]) Load(cfg *T) error {
 
 	var merged any
 	merger := func(doc any) {
+		if doc == nil {
+			return
+		}
 		merged = mergeDocument(merged, normalizeDocument(doc))
 	}
 

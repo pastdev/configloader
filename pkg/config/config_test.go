@@ -108,6 +108,45 @@ func TestLoad(t *testing.T) {
 		}.Test(t, map[any]any{"foo": "baz", "hip": "hop"}, map[any]any{})
 	})
 
+	t.Run("empty root document", func(t *testing.T) {
+		LoadTester[map[any]any]{
+			Sources: []config.SourceLoader{
+				config.RawSource{Data: []byte(`{"foo":"bar"}`)},
+				config.RawSource{Data: []byte(``)},
+			},
+		}.Test(t, map[any]any{"foo": "bar"}, map[any]any{})
+	})
+
+	t.Run("comment only document", func(t *testing.T) {
+		LoadTester[map[any]any]{
+			Sources: []config.SourceLoader{
+				config.RawSource{Data: []byte(`{"foo":"bar"}`)},
+				config.RawSource{Data: []byte(`# comment only`)},
+			},
+		}.Test(t, map[any]any{"foo": "bar"}, map[any]any{})
+	})
+
+	t.Run("document start only", func(t *testing.T) {
+		LoadTester[map[any]any]{
+			Sources: []config.SourceLoader{
+				config.RawSource{Data: []byte(`{"foo":"bar"}`)},
+				config.RawSource{Data: []byte(`---`)},
+			},
+		}.Test(t, map[any]any{"foo": "bar"}, map[any]any{})
+	})
+
+	t.Run("explicit null root", func(t *testing.T) {
+		// in the future, we may want to allow a truly null explicit value
+		// at the root to zero out all prior config, but for now, we are
+		// not concerned with it.
+		LoadTester[map[any]any]{
+			Sources: []config.SourceLoader{
+				config.RawSource{Data: []byte(`{"foo":"bar"}`)},
+				config.RawSource{Data: []byte(`---`)},
+			},
+		}.Test(t, map[any]any{"foo": "bar"}, map[any]any{})
+	})
+
 	t.Run("simple file", func(t *testing.T) {
 		LoadTester[map[any]any]{
 			Files: map[string]string{"config.yml": `{"foo":"bar"}`},
