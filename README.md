@@ -126,13 +126,56 @@ sources := config.Sources[AppConfig]{
 * `*map[string]any`
 * `*[]any`
 
-The `config.DefaultFuncMap()` contains utility functions for accessing secrets from various password managers and XDG helpers, including:
+The `config.DefaultFuncMap()` contains utility functions for accessing secrets from various password managers, path helpers, and XDG helpers, including:
 
 * [bitwarden](#bitwarden)
 * [lastpass](#lastpass)
+* [home, user, and relative paths](#home-user-and-relative-paths)
 * [xdg](#xdg)
 
 This map can be added to, or replaced.
+
+#### Home, user, and relative paths
+
+`DefaultFuncMap` also includes:
+
+* `home` — `os.UserHomeDir`
+* `user` — `user.Current().Username`
+* `relativeFile`
+* `relativeDir`
+
+`home` and `user` return an error if the OS lookup fails.
+They are not XDG bases; the existing `xdg*` functions are unchanged.
+
+```gotemplate
+{{ home }}
+{{ user }}
+{{ relativeFile "keys/gitlab.token" }}
+{{ relativeFile "ts/filters/audit.ts" "last" }}
+{{ relativeDir "ts" "last" }}
+```
+
+`relativeFile` and `relativeDir` take a relative path and an optional string mode.
+Mode is one of `this`, `first`, or `last`.
+Default is `this` when the argument is omitted.
+
+* `this`: join the path with the directory of the YAML file currently being read
+* `first`: walk config dirs in load order and take the first existing match (earliest source wins)
+* `last`: same walk, take the last existing match (later overlay wins)
+
+`relativeFile` must resolve to a file.
+`relativeDir` must resolve to a directory.
+Unknown modes, absolute paths, paths containing `..`, and missing matches all error.
+
+Config dirs used by `first` and `last` come from the current `Sources` list, in load order, after `~/` expansion:
+
+* for `FileSource`, the config dir is `filepath.Dir` of that file
+* for `DirSource`, the config dir is the directory itself
+
+A later directory can supply the file even when it did not mention the path in YAML.
+That overlay case looks like an earlier config naming `{{ relativeFile "ts/filters/audit.ts" "last" }}`, with a later config dir overriding only the file contents.
+
+These functions need load context, so they are intended to be used through `Sources.Load` (or `FileSource`/`DirSource` `Load`) with `YamlValueTemplateUnmarshal`.
 
 #### Bitwarden
 

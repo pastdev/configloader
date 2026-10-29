@@ -125,13 +125,18 @@ func (s DirSource) Load(merge Merger) error {
 		}
 
 		files.Str(file)
-		var doc any
-		err = unmarshal(b, &doc, s.Unmarshal)
+		err = withLoadFile(file, func() error {
+			var doc any
+			err := unmarshal(b, &doc, s.Unmarshal)
+			if err != nil {
+				return fmt.Errorf("load from dir: %w", err)
+			}
+			merge(doc)
+			return nil
+		})
 		if err != nil {
-			return fmt.Errorf("load from dir: %w", err)
+			return err
 		}
-
-		merge(doc)
 	}
 
 	log.Logger.Debug().Str("dir", s.Path).Array("files", files).Msg("loaded dirsource config")

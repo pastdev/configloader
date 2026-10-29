@@ -16,23 +16,27 @@ type FileSource struct {
 }
 
 func (s FileSource) Load(merge Merger) error {
-	b, err := os.ReadFile(normalizePath(s.Path))
+	path := normalizePath(s.Path)
+	//nolint:gosec // intent is to allow user specified config file
+	b, err := os.ReadFile(path)
 	if err != nil {
 		log.Logger.Debug().Str("file", s.Path).Msg("config not found")
 		//nolint: nilerr // intentional ignore error
 		return nil
 	}
 
-	var doc any
-	err = unmarshal(b, &doc, s.Unmarshal)
-	if err != nil {
-		return fmt.Errorf("load from file: %w", err)
-	}
+	return withLoadFile(path, func() error {
+		var doc any
+		err := unmarshal(b, &doc, s.Unmarshal)
+		if err != nil {
+			return fmt.Errorf("load from file: %w", err)
+		}
 
-	merge(doc)
+		merge(doc)
 
-	log.Logger.Debug().Str("file", s.Path).Msg("loaded filesource config")
-	return nil
+		log.Logger.Debug().Str("file", s.Path).Msg("loaded filesource config")
+		return nil
+	})
 }
 
 func (s FileSource) String() string {

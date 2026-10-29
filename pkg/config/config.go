@@ -39,34 +39,36 @@ type Sources[T any] struct {
 func (s Sources[T]) Load(cfg *T) error {
 	start := time.Now()
 
-	var merged any
-	merger := func(doc any) {
-		if doc == nil {
-			return
+	return withLoadDirs(configDirs(s.Sources), func() error {
+		var merged any
+		merger := func(doc any) {
+			if doc == nil {
+				return
+			}
+			merged = mergeDocument(merged, normalizeDocument(doc))
 		}
-		merged = mergeDocument(merged, normalizeDocument(doc))
-	}
 
-	for _, src := range s.Sources {
-		err := src.Load(merger)
-		if err != nil {
-			return fmt.Errorf("load %s: %w", src, err)
+		for _, src := range s.Sources {
+			err := src.Load(merger)
+			if err != nil {
+				return fmt.Errorf("load %s: %w", src, err)
+			}
 		}
-	}
 
-	if merged != nil {
-		convert := s.Convert
-		if convert == nil {
-			convert = YamlConvert
+		if merged != nil {
+			convert := s.Convert
+			if convert == nil {
+				convert = YamlConvert
+			}
+			err := convert(merged, cfg)
+			if err != nil {
+				return fmt.Errorf("convert: %w", err)
+			}
 		}
-		err := convert(merged, cfg)
-		if err != nil {
-			return fmt.Errorf("convert: %w", err)
-		}
-	}
 
-	log.Logger.Debug().Dur("duration", time.Since(start)).Msg("load complete")
-	return nil
+		log.Logger.Debug().Dur("duration", time.Since(start)).Msg("load complete")
+		return nil
+	})
 }
 
 func normalizePath(path string) string {

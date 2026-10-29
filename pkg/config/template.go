@@ -19,6 +19,10 @@ func DefaultFuncMap() map[string]any {
 	bitwarden.New().AddFuncs(funcs)
 	lastpass.New().AddFuncs(funcs)
 	xdg.AddFuncs(funcs)
+	funcs["home"] = home
+	funcs["user"] = currentUsername
+	funcs["relativeFile"] = relativeFile
+	funcs["relativeDir"] = relativeDir
 	return funcs
 }
 
