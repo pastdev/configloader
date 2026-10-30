@@ -87,8 +87,7 @@ func currentUsernameRaw(fallbacks ...string) (string, error) {
 // LoadContext bound func: on each Execute it is called with the supplied lc
 // and its result is used as the template func of that name.
 type Template struct {
-	funcMap    map[string]any
-	contextual map[string]func(LoadContext) any
+	funcMap map[string]any
 }
 
 type Executor interface {
@@ -105,16 +104,7 @@ func (t *Template) Execute(lc LoadContext, name string, value any) (any, error) 
 		return value, nil
 	}
 
-	tmpl := template.New(name).Funcs(t.funcMap)
-	if len(t.contextual) > 0 {
-		bound := make(template.FuncMap, len(t.contextual))
-		for k, factory := range t.contextual {
-			bound[k] = factory(lc)
-		}
-		tmpl = tmpl.Funcs(bound)
-	}
-
-	tmpl, err := tmpl.Parse(str)
+	tmpl, err := template.New(name).Funcs(t.funcs(lc)).Parse(str)
 	if err != nil {
 		return nil, fmt.Errorf("new template: %w", err)
 	}
@@ -135,16 +125,24 @@ func (t *Template) Execute(lc LoadContext, name string, value any) (any, error) 
 	return parsed, nil
 }
 
-func NewTemplate(funcMap template.FuncMap) *Template {
-	contextual := map[string]func(LoadContext) any{}
-	for k, v := range funcMap {
-		if factory, ok := v.(func(LoadContext) any); ok {
-			contextual[k] = factory
+// funcs returns the func map with each func(LoadContext) any factory bound to
+// lc.
+func (t *Template) funcs(lc LoadContext) template.FuncMap {
+	funcs := make(template.FuncMap, len(t.funcMap))
+	for k, v := range t.funcMap {
+		switch typed := v.(type) {
+		case func(LoadContext) any:
+			funcs[k] = typed(lc)
+		default:
+			funcs[k] = v
 		}
 	}
+	return funcs
+}
+
+func NewTemplate(funcMap template.FuncMap) *Template {
 	return &Template{
-		funcMap:    funcMap,
-		contextual: contextual,
+		funcMap: funcMap,
 	}
 }
 

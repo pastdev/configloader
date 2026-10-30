@@ -35,6 +35,43 @@ func TestDefaultFuncMap(t *testing.T) {
 	})
 }
 
+func TestNewTemplate(t *testing.T) {
+	tester := func(t *testing.T, funcs map[string]any, value string, expected any) {
+		t.Helper()
+		actual, err := config.NewTemplate(funcs).Execute(config.LoadContext{File: "/app/config.yml"}, "test", value)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
+	}
+
+	file := func(lc config.LoadContext) any {
+		return func() string { return lc.File }
+	}
+
+	t.Run("plain func is called as is", func(t *testing.T) {
+		tester(t,
+			map[string]any{"greet": func() string { return "hello" }},
+			"{{ greet }}",
+			"hello")
+	})
+
+	t.Run("factory is bound to the load context", func(t *testing.T) {
+		tester(t,
+			map[string]any{"file": file},
+			"{{ file }}",
+			"/app/config.yml")
+	})
+
+	t.Run("factory added after NewTemplate is bound", func(t *testing.T) {
+		funcs := map[string]any{}
+		tmpl := config.NewTemplate(funcs)
+		funcs["file"] = file
+
+		actual, err := tmpl.Execute(config.LoadContext{File: "/app/config.yml"}, "test", "{{ file }}")
+		require.NoError(t, err)
+		require.Equal(t, "/app/config.yml", actual)
+	})
+}
+
 func TestYamlValueTemplateUnmarshal(t *testing.T) {
 	unmarshal := config.YamlValueTemplateUnmarshal(
 		config.NewTemplate(template.FuncMap{
