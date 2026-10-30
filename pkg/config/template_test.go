@@ -11,6 +11,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestDefaultFuncMap(t *testing.T) {
+	tester := func(t *testing.T, name string) {
+		t.Helper()
+		_, ok := config.DefaultFuncMap()[name]
+		require.True(t, ok, "expected %s in DefaultFuncMap", name)
+	}
+
+	t.Run("includes base funcs", func(t *testing.T) {
+		for _, name := range []string{"home", "user", "userRaw"} {
+			tester(t, name)
+		}
+	})
+
+	t.Run("includes meta funcs", func(t *testing.T) {
+		for _, name := range []string{"relativeFile", "relativeDir"} {
+			tester(t, name)
+		}
+	})
+
+	t.Run("includes xdg funcs", func(t *testing.T) {
+		tester(t, "xdgConfigHome")
+	})
+}
+
 func TestYamlValueTemplateUnmarshal(t *testing.T) {
 	unmarshal := config.YamlValueTemplateUnmarshal(
 		config.NewTemplate(template.FuncMap{

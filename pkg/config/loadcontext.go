@@ -10,6 +10,14 @@ import (
 // UnmarshalFunc, and Executor. See meta.LoadContext.
 type LoadContext = meta.LoadContext
 
+// WrappedSourceLoader is implemented by a SourceLoader that wraps another
+// SourceLoader. The wrapped source is used to find the config dir that
+// relativeFile and relativeDir search in "first" and "last" modes.
+type WrappedSourceLoader interface {
+	SourceLoader
+	InnerSource() SourceLoader
+}
+
 func configDirs(sources []SourceLoader) []string {
 	var dirs []string
 	for _, src := range sources {
@@ -33,7 +41,7 @@ func configDirOf(src SourceLoader) (string, bool) {
 			return normalizePath(s.Path), true
 		}
 
-		nested, ok := src.(interface{ InnerSource() SourceLoader })
+		nested, ok := src.(WrappedSourceLoader)
 		if !ok {
 			return "", false
 		}
