@@ -11,10 +11,14 @@ import (
 	"text/template"
 )
 
+// relativeMode is how RelativeFile and RelativeDir resolve a path. See
+// parseRelativeMode for the template syntax of each.
+type relativeMode int
+
 const (
-	relativeModeThis  = "this"
-	relativeModeFirst = "first"
-	relativeModeLast  = "last"
+	relativeModeThis relativeMode = iota
+	relativeModeFirst
+	relativeModeLast
 )
 
 // LoadContext is the per-load information supplied to each SourceLoader,
@@ -81,24 +85,32 @@ func resolveRelative(lc LoadContext, kind, rel string, wantDir bool, modeArgs ..
 			return "", fmt.Errorf("%s: %w", kind, err)
 		}
 		return resolved, nil
-	default:
-		return "", fmt.Errorf("%s: unknown mode %q", kind, mode)
 	}
+
+	// unreachable: parseRelativeMode only returns known modes, and the
+	// exhaustive linter checks the switch above handles each of them
+	return "", fmt.Errorf("%s: unhandled mode %d", kind, mode)
 }
 
-func parseRelativeMode(modeArgs []string) (string, error) {
+// parseRelativeMode parses the optional template mode argument: "this"
+// (default), "first", or "last".
+func parseRelativeMode(modeArgs []string) (relativeMode, error) {
 	switch len(modeArgs) {
 	case 0:
 		return relativeModeThis, nil
 	case 1:
 		switch modeArgs[0] {
-		case relativeModeThis, relativeModeFirst, relativeModeLast:
-			return modeArgs[0], nil
+		case "this":
+			return relativeModeThis, nil
+		case "first":
+			return relativeModeFirst, nil
+		case "last":
+			return relativeModeLast, nil
 		default:
-			return "", fmt.Errorf("unknown mode %q", modeArgs[0])
+			return 0, fmt.Errorf("unknown mode %q", modeArgs[0])
 		}
 	default:
-		return "", fmt.Errorf("mode accepts at most one argument")
+		return 0, fmt.Errorf("mode accepts at most one argument")
 	}
 }
 
