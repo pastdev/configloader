@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,10 +14,25 @@ import (
 
 type Merger func(doc any)
 
+// UnmarshalFunc unmarshals b into cfg. The supplied ctx carries per-load
+// information (such as the file currently being read) that template funcs
+// like relativeFile need, and should be passed along to any Executor.
+type UnmarshalFunc func(ctx context.Context, b []byte, cfg any) error
+
+// WrapUnmarshal adapts a context free unmarshal func, such as json.Unmarshal
+// or yaml.Unmarshal, to an UnmarshalFunc.
+func WrapUnmarshal(fn func(b []byte, cfg any) error) UnmarshalFunc {
+	return func(_ context.Context, b []byte, cfg any) error {
+		return fn(b, cfg)
+	}
+}
+
 // SourceLoader is the primary interface for loading configuration from a
 // source.
 type SourceLoader interface {
-	Load(merge Merger) error
+	// Load calls merge for each document in the source. Implementations
+	// should pass ctx along to their UnmarshalFunc.
+	Load(ctx context.Context, merge Merger) error
 	String() string
 }
 
@@ -37,38 +53,43 @@ type Sources[T any] struct {
 // document will then be supplied to the converter to unmarshal into the
 // supplied cfg object.
 func (s Sources[T]) Load(cfg *T) error {
+	return s.LoadContext(context.Background(), cfg)
+}
+
+// LoadContext is Load with a caller supplied ctx that is passed to each
+// SourceLoader.
+func (s Sources[T]) LoadContext(ctx context.Context, cfg *T) error {
 	start := time.Now()
+	ctx = withLoadDirs(ctx, configDirs(s.Sources))
 
-	return withLoadDirs(configDirs(s.Sources), func() error {
-		var merged any
-		merger := func(doc any) {
-			if doc == nil {
-				return
-			}
-			merged = mergeDocument(merged, normalizeDocument(doc))
+	var merged any
+	merger := func(doc any) {
+		if doc == nil {
+			return
 		}
+		merged = mergeDocument(merged, normalizeDocument(doc))
+	}
 
-		for _, src := range s.Sources {
-			err := src.Load(merger)
-			if err != nil {
-				return fmt.Errorf("load %s: %w", src, err)
-			}
+	for _, src := range s.Sources {
+		err := src.Load(ctx, merger)
+		if err != nil {
+			return fmt.Errorf("load %s: %w", src, err)
 		}
+	}
 
-		if merged != nil {
-			convert := s.Convert
-			if convert == nil {
-				convert = YamlConvert
-			}
-			err := convert(merged, cfg)
-			if err != nil {
-				return fmt.Errorf("convert: %w", err)
-			}
+	if merged != nil {
+		convert := s.Convert
+		if convert == nil {
+			convert = YamlConvert
 		}
+		err := convert(merged, cfg)
+		if err != nil {
+			return fmt.Errorf("convert: %w", err)
+		}
+	}
 
-		log.Logger.Debug().Dur("duration", time.Since(start)).Msg("load complete")
-		return nil
-	})
+	log.Logger.Debug().Dur("duration", time.Since(start)).Msg("load complete")
+	return nil
 }
 
 func normalizePath(path string) string {
@@ -83,12 +104,12 @@ func normalizePath(path string) string {
 	return path
 }
 
-func unmarshal(b []byte, cfg any, unmarshal func(b []byte, cfg any) error) error {
+func unmarshal(ctx context.Context, b []byte, cfg any, unmarshal UnmarshalFunc) error {
 	if unmarshal == nil {
 		unmarshal = YamlUnmarshal()
 	}
 
-	err := unmarshal(b, cfg)
+	err := unmarshal(ctx, b, cfg)
 	if err != nil {
 		return fmt.Errorf("unmarshal: %w", err)
 	}
@@ -111,8 +132,8 @@ func YamlConvert[T any](doc any, cfg *T) error {
 }
 
 // YamlUnmarshal is an Unmarshal function that unmarshals from yaml.
-func YamlUnmarshal() func(b []byte, cfg any) error {
-	return func(b []byte, cfg any) error {
+func YamlUnmarshal() UnmarshalFunc {
+	return func(_ context.Context, b []byte, cfg any) error {
 		err := yaml.Unmarshal(b, cfg)
 		if err != nil {
 			return fmt.Errorf("yamlunmarshal: %w", err)

@@ -1,33 +1,39 @@
 package config
 
 import (
+	"context"
 	"path/filepath"
 )
 
-// loadContext is the per-load information template functions need to resolve
-// paths relative to config sources.
-type loadContext struct {
-	// file is the YAML file currently being unmarshaled (for "this").
-	file string
-	// dirs is the config directories of the current Sources list, in load
-	// order, after normalizePath (for "first" and "last").
-	dirs []string
+// loadFileKey and loadDirsKey are the context keys for the per-load
+// information template functions need to resolve paths relative to config
+// sources.
+type (
+	loadFileKey struct{}
+	loadDirsKey struct{}
+)
+
+// withLoadFile returns ctx carrying file, the YAML file currently being
+// unmarshaled (for "this").
+func withLoadFile(ctx context.Context, file string) context.Context {
+	return context.WithValue(ctx, loadFileKey{}, file)
 }
 
-var currentLoadContext loadContext
-
-func withLoadFile(file string, fn func() error) error {
-	prev := currentLoadContext.file
-	currentLoadContext.file = file
-	defer func() { currentLoadContext.file = prev }()
-	return fn()
+func loadFile(ctx context.Context) string {
+	file, _ := ctx.Value(loadFileKey{}).(string)
+	return file
 }
 
-func withLoadDirs(dirs []string, fn func() error) error {
-	prev := currentLoadContext.dirs
-	currentLoadContext.dirs = dirs
-	defer func() { currentLoadContext.dirs = prev }()
-	return fn()
+// withLoadDirs returns ctx carrying dirs, the config directories of the
+// current Sources list, in load order, after normalizePath (for "first" and
+// "last").
+func withLoadDirs(ctx context.Context, dirs []string) context.Context {
+	return context.WithValue(ctx, loadDirsKey{}, dirs)
+}
+
+func loadDirs(ctx context.Context) []string {
+	dirs, _ := ctx.Value(loadDirsKey{}).([]string)
+	return dirs
 }
 
 func configDirs(sources []SourceLoader) []string {

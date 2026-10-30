@@ -18,7 +18,7 @@ type sourcesValue struct {
 
 // DirSourceVar calls DirSourceVarP without a shorthand flag.
 func (f *flags[T]) DirSourceVar(
-	unmarshal func(b []byte, cfg any) error,
+	unmarshal config.UnmarshalFunc,
 	name string,
 	usage string,
 ) {
@@ -29,7 +29,7 @@ func (f *flags[T]) DirSourceVar(
 // specified folder. This file iteration is not recursive. The supplied
 // unmarshal func will be used to parse the files.
 func (f *flags[T]) DirSourceVarP(
-	unmarshal func(b []byte, cfg any) error,
+	unmarshal config.UnmarshalFunc,
 	name string,
 	shorthand string,
 	usage string,
@@ -48,7 +48,7 @@ func (f *flags[T]) DirSourceVarP(
 
 // FileSourceVar calls FileSourceVarP without a shorthand flag.
 func (f *flags[T]) FileSourceVar(
-	unmarshal func(b []byte, cfg any) error,
+	unmarshal config.UnmarshalFunc,
 	name string,
 	usage string,
 ) {
@@ -58,7 +58,7 @@ func (f *flags[T]) FileSourceVar(
 // FileSourceVarP will add a source loader that will read the specified file.
 // The supplied unmarshal func will be used to parse the file.
 func (f *flags[T]) FileSourceVarP(
-	unmarshal func(b []byte, cfg any) error,
+	unmarshal config.UnmarshalFunc,
 	name string,
 	shorthand string,
 	usage string,

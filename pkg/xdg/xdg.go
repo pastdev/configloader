@@ -10,6 +10,8 @@ import (
 	"os/user"
 	"path/filepath"
 	"text/template"
+
+	"github.com/pastdev/configloader/internal/fallback"
 )
 
 var (
@@ -22,21 +24,14 @@ func nonEmptyEnv(name string) (string, bool) {
 	return v, ok && v != ""
 }
 
-func firstFallback(fallback ...string) (string, bool) {
-	if len(fallback) == 0 || fallback[0] == "" {
-		return "", false
-	}
-	return fallback[0], true
-}
-
-func homePath(subPath string, envVar string, fallback ...string) (string, error) {
+func homePath(subPath string, envVar string, fallbacks ...string) (string, error) {
 	if v, ok := nonEmptyEnv(envVar); ok {
 		return v, nil
 	}
 
 	home, err := osUserHomeDir()
 	if err != nil {
-		if v, ok := firstFallback(fallback...); ok {
+		if v, ok := fallback.First(fallbacks...); ok {
 			return v, nil
 		}
 		return "", fmt.Errorf("user home dir: %w", err)
@@ -157,14 +152,14 @@ func StateHome(fallback ...string) (string, error) {
 // If XDG_RUNTIME_DIR is set and non-empty, it is used. Otherwise a best-effort
 // replacement directory is returned. If that cannot be determined, the optional
 // fallback is used if supplied.
-func RuntimeDir(fallback ...string) (string, error) {
+func RuntimeDir(fallbacks ...string) (string, error) {
 	if v, ok := nonEmptyEnv("XDG_RUNTIME_DIR"); ok {
 		return v, nil
 	}
 
 	u, err := userCurrent()
 	if err != nil {
-		if v, ok := firstFallback(fallback...); ok {
+		if v, ok := fallback.First(fallbacks...); ok {
 			return v, nil
 		}
 		return "", fmt.Errorf("current user: %w", err)

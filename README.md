@@ -66,20 +66,22 @@ exclude:
 
 By default, [`YamlUnmarshal`](./pkg/config/config.go) is used to decode each source into an intermediate document.
 
-You can replace that with a custom unmarshaler if you would like:
+You can replace that with a custom [`UnmarshalFunc`](./pkg/config/config.go) if you would like.
+`config.WrapUnmarshal` adapts a context free func like `json.Unmarshal`:
 
 ```go
 sources := config.Sources[map[string]any]{
     Sources: []config.SourceLoader{
         config.FileSource{
-            Path: "~/.config/configloader.json",
-            Unmarshal: func(b []byte, cfg any) error {
-                return json.Unmarshal(b, cfg)
-            },
+            Path:      "~/.config/configloader.json",
+            Unmarshal: config.WrapUnmarshal(json.Unmarshal),
         },
     },
 }
 ```
+
+The `ctx` given to an `UnmarshalFunc` carries per-load information (such as the file being read) used by template functions like `relativeFile`.
+A custom `UnmarshalFunc` that templates values should pass it along to `config.Walk` or its `Executor`.
 
 ### Converting the merged document
 
@@ -140,11 +142,12 @@ This map can be added to, or replaced.
 `DefaultFuncMap` also includes:
 
 * `home` — `os.UserHomeDir`
-* `user` — `user.Current().Username`
+* `user` — `user.Current().Username`, lowercased with any `DOMAIN\` prefix removed
+* `userRaw` — `user.Current().Username` as reported by the OS
 * `relativeFile`
 * `relativeDir`
 
-`home` and `user` return an error if the OS lookup fails.
+`home`, `user`, and `userRaw` accept an optional fallback (e.g. `{{ home "/tmp" }}`) used if the OS lookup fails, otherwise they return an error.
 They are not XDG bases; the existing `xdg*` functions are unchanged.
 
 ```gotemplate
@@ -176,6 +179,7 @@ A later directory can supply the file even when it did not mention the path in Y
 That overlay case looks like an earlier config naming `{{ relativeFile "ts/filters/audit.ts" "last" }}`, with a later config dir overriding only the file contents.
 
 These functions need load context, so they are intended to be used through `Sources.Load` (or `FileSource`/`DirSource` `Load`) with `YamlValueTemplateUnmarshal`.
+The context is passed explicitly through each load, so concurrent loads are independent.
 
 #### Bitwarden
 

@@ -1,11 +1,14 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
+
+	"github.com/pastdev/configloader/internal/fallback"
 )
 
 const (
@@ -19,31 +22,57 @@ var (
 	userCurrent   = user.Current
 )
 
-func home() (string, error) {
+// home returns os.UserHomeDir. If that fails, the optional fallback is used if
+// supplied.
+func home(fallbacks ...string) (string, error) {
 	h, err := osUserHomeDir()
 	if err != nil {
+		if v, ok := fallback.First(fallbacks...); ok {
+			return v, nil
+		}
 		return "", fmt.Errorf("home: %w", err)
 	}
 	return h, nil
 }
 
-func currentUsername() (string, error) {
+// currentUsername returns the current username lowercased and with any
+// windows domain prefix (DOMAIN\) removed. If the lookup fails, the optional
+// fallback is used if supplied.
+func currentUsername(fallbacks ...string) (string, error) {
+	username, err := currentUsernameRaw(fallbacks...)
+	if err != nil {
+		return "", err
+	}
+
+	username = strings.ToLower(username)
+	if idx := strings.Index(username, "\\"); idx != -1 {
+		username = username[idx+1:]
+	}
+	return username, nil
+}
+
+// currentUsernameRaw returns the current username as reported by the OS. If
+// the lookup fails, the optional fallback is used if supplied.
+func currentUsernameRaw(fallbacks ...string) (string, error) {
 	u, err := userCurrent()
 	if err != nil {
+		if v, ok := fallback.First(fallbacks...); ok {
+			return v, nil
+		}
 		return "", fmt.Errorf("user: %w", err)
 	}
 	return u.Username, nil
 }
 
-func relativeFile(path string, mode ...string) (string, error) {
-	return resolveRelative("relativeFile", path, false, mode...)
+func relativeFile(ctx context.Context, path string, mode ...string) (string, error) {
+	return resolveRelative(ctx, "relativeFile", path, false, mode...)
 }
 
-func relativeDir(path string, mode ...string) (string, error) {
-	return resolveRelative("relativeDir", path, true, mode...)
+func relativeDir(ctx context.Context, path string, mode ...string) (string, error) {
+	return resolveRelative(ctx, "relativeDir", path, true, mode...)
 }
 
-func resolveRelative(kind, rel string, wantDir bool, modeArgs ...string) (string, error) {
+func resolveRelative(ctx context.Context, kind, rel string, wantDir bool, modeArgs ...string) (string, error) {
 	if err := validateRelativePath(rel); err != nil {
 		return "", fmt.Errorf("%s: %w", kind, err)
 	}
@@ -55,13 +84,13 @@ func resolveRelative(kind, rel string, wantDir bool, modeArgs ...string) (string
 
 	switch mode {
 	case relativeModeThis:
-		resolved, err := resolveThis(rel)
+		resolved, err := resolveThis(ctx, rel)
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", kind, err)
 		}
 		return checkRelativeType(rel, resolved, wantDir)
 	case relativeModeFirst, relativeModeLast:
-		resolved, err := resolveAlongDirs(rel, wantDir, mode == relativeModeLast)
+		resolved, err := resolveAlongDirs(ctx, rel, wantDir, mode == relativeModeLast)
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", kind, err)
 		}
@@ -109,17 +138,18 @@ func pathHasDotDot(path string) bool {
 	return false
 }
 
-func resolveThis(rel string) (string, error) {
-	if currentLoadContext.file == "" {
+func resolveThis(ctx context.Context, rel string) (string, error) {
+	file := loadFile(ctx)
+	if file == "" {
 		return "", fmt.Errorf("no current file")
 	}
-	return joinUnder(filepath.Dir(currentLoadContext.file), rel)
+	return joinUnder(filepath.Dir(file), rel)
 }
 
-func resolveAlongDirs(rel string, wantDir, last bool) (string, error) {
+func resolveAlongDirs(ctx context.Context, rel string, wantDir, last bool) (string, error) {
 	var match string
 	found := false
-	for _, dir := range currentLoadContext.dirs {
+	for _, dir := range loadDirs(ctx) {
 		candidate, err := joinUnder(dir, rel)
 		if err != nil {
 			return "", err

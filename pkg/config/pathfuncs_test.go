@@ -2,9 +2,11 @@
 package config_test
 
 import (
+	"context"
 	"os"
 	"os/user"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/pastdev/configloader/pkg/config"
@@ -21,7 +23,7 @@ func (s innerSource) InnerSource() config.SourceLoader {
 
 func TestDefaultFuncMapPathHelpers(t *testing.T) {
 	funcs := config.DefaultFuncMap()
-	for _, name := range []string{"home", "user", "relativeFile", "relativeDir"} {
+	for _, name := range []string{"home", "user", "userRaw", "relativeFile", "relativeDir"} {
 		_, ok := funcs[name]
 		require.True(t, ok, "expected %s in DefaultFuncMap", name)
 	}
@@ -36,7 +38,7 @@ func TestHomeAndUserTemplateFuncs(t *testing.T) {
 	require.NoError(t, err)
 
 	var actual map[any]any
-	err = unmarshal([]byte(`
+	err = unmarshal(context.Background(), []byte(`
 home: '{{ home }}'
 user: '{{ user }}'
 `), &actual)
@@ -275,6 +277,41 @@ func TestRelativePathFuncs(t *testing.T) {
 			config.DirSource{Path: userDir},
 		)
 		require.Equal(t, userFile, actual["token"])
+	})
+
+	t.Run("concurrent loads are isolated", func(t *testing.T) {
+		const n = 16
+		dirs := make([]string, n)
+		for i := range dirs {
+			dirs[i] = t.TempDir()
+			write(t, dirs[i], map[string]string{
+				"config.yml":        `token: '{{ relativeFile "keys/gitlab.token" }}'` + "\n",
+				"keys/gitlab.token": "secret",
+			})
+		}
+
+		var wg sync.WaitGroup
+		results := make([]any, n)
+		errs := make([]error, n)
+		for i := range dirs {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				var actual map[any]any
+				errs[i] = (config.Sources[map[any]any]{
+					Sources: []config.SourceLoader{
+						config.FileSource{Path: filepath.Join(dirs[i], "config.yml"), Unmarshal: unmarshal},
+					},
+				}).Load(&actual)
+				results[i] = actual["token"]
+			}()
+		}
+		wg.Wait()
+
+		for i := range dirs {
+			require.NoError(t, errs[i])
+			require.Equal(t, filepath.Join(dirs[i], "keys", "gitlab.token"), results[i])
+		}
 	})
 
 	t.Run("dot dot rejected", func(t *testing.T) {
