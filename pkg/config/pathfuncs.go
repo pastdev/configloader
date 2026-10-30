@@ -1,7 +1,6 @@
 package config
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/user"
@@ -64,15 +63,15 @@ func currentUsernameRaw(fallbacks ...string) (string, error) {
 	return u.Username, nil
 }
 
-func relativeFile(ctx context.Context, path string, mode ...string) (string, error) {
-	return resolveRelative(ctx, "relativeFile", path, false, mode...)
+func relativeFile(lc LoadContext, path string, mode ...string) (string, error) {
+	return resolveRelative(lc, "relativeFile", path, false, mode...)
 }
 
-func relativeDir(ctx context.Context, path string, mode ...string) (string, error) {
-	return resolveRelative(ctx, "relativeDir", path, true, mode...)
+func relativeDir(lc LoadContext, path string, mode ...string) (string, error) {
+	return resolveRelative(lc, "relativeDir", path, true, mode...)
 }
 
-func resolveRelative(ctx context.Context, kind, rel string, wantDir bool, modeArgs ...string) (string, error) {
+func resolveRelative(lc LoadContext, kind, rel string, wantDir bool, modeArgs ...string) (string, error) {
 	if err := validateRelativePath(rel); err != nil {
 		return "", fmt.Errorf("%s: %w", kind, err)
 	}
@@ -84,13 +83,13 @@ func resolveRelative(ctx context.Context, kind, rel string, wantDir bool, modeAr
 
 	switch mode {
 	case relativeModeThis:
-		resolved, err := resolveThis(ctx, rel)
+		resolved, err := resolveThis(lc, rel)
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", kind, err)
 		}
 		return checkRelativeType(rel, resolved, wantDir)
 	case relativeModeFirst, relativeModeLast:
-		resolved, err := resolveAlongDirs(ctx, rel, wantDir, mode == relativeModeLast)
+		resolved, err := resolveAlongDirs(lc, rel, wantDir, mode == relativeModeLast)
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", kind, err)
 		}
@@ -138,18 +137,17 @@ func pathHasDotDot(path string) bool {
 	return false
 }
 
-func resolveThis(ctx context.Context, rel string) (string, error) {
-	file := loadFile(ctx)
-	if file == "" {
+func resolveThis(lc LoadContext, rel string) (string, error) {
+	if lc.File == "" {
 		return "", fmt.Errorf("no current file")
 	}
-	return joinUnder(filepath.Dir(file), rel)
+	return joinUnder(filepath.Dir(lc.File), rel)
 }
 
-func resolveAlongDirs(ctx context.Context, rel string, wantDir, last bool) (string, error) {
+func resolveAlongDirs(lc LoadContext, rel string, wantDir, last bool) (string, error) {
 	var match string
 	found := false
-	for _, dir := range loadDirs(ctx) {
+	for _, dir := range lc.Dirs {
 		candidate, err := joinUnder(dir, rel)
 		if err != nil {
 			return "", err

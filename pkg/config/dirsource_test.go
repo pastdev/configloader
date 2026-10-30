@@ -2,7 +2,6 @@
 package config_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,7 +27,7 @@ func TestDirSourceLoad(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		err := (config.DirSource{Path: dir}).Load(context.Background(), func(any) {})
+		err := (config.DirSource{Path: dir}).Load(config.LoadContext{}, func(any) {})
 		require.Error(t, err)
 	}
 

@@ -1,39 +1,19 @@
 package config
 
 import (
-	"context"
 	"path/filepath"
 )
 
-// loadFileKey and loadDirsKey are the context keys for the per-load
-// information template functions need to resolve paths relative to config
-// sources.
-type (
-	loadFileKey struct{}
-	loadDirsKey struct{}
-)
-
-// withLoadFile returns ctx carrying file, the YAML file currently being
-// unmarshaled (for "this").
-func withLoadFile(ctx context.Context, file string) context.Context {
-	return context.WithValue(ctx, loadFileKey{}, file)
-}
-
-func loadFile(ctx context.Context) string {
-	file, _ := ctx.Value(loadFileKey{}).(string)
-	return file
-}
-
-// withLoadDirs returns ctx carrying dirs, the config directories of the
-// current Sources list, in load order, after normalizePath (for "first" and
-// "last").
-func withLoadDirs(ctx context.Context, dirs []string) context.Context {
-	return context.WithValue(ctx, loadDirsKey{}, dirs)
-}
-
-func loadDirs(ctx context.Context) []string {
-	dirs, _ := ctx.Value(loadDirsKey{}).([]string)
-	return dirs
+// LoadContext is the per-load information supplied to each SourceLoader,
+// UnmarshalFunc, and Executor. Template funcs such as relativeFile use it to
+// resolve paths relative to config sources.
+type LoadContext struct {
+	// File is the file currently being unmarshaled (for "this"). It is empty
+	// for sources that are not backed by a file, such as RawSource.
+	File string
+	// Dirs is the config directories of the current Sources list, in load
+	// order, after normalizePath (for "first" and "last").
+	Dirs []string
 }
 
 func configDirs(sources []SourceLoader) []string {

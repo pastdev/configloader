@@ -1,7 +1,6 @@
 package config
 
 import (
-	"context"
 	"fmt"
 )
 
@@ -12,9 +11,9 @@ type RawSource struct {
 	Unmarshal UnmarshalFunc
 }
 
-func (s RawSource) Load(ctx context.Context, merge Merger) error {
+func (s RawSource) Load(lc LoadContext, merge Merger) error {
 	var doc any
-	err := unmarshal(ctx, s.Data, &doc, s.Unmarshal)
+	err := unmarshal(lc, s.Data, &doc, s.Unmarshal)
 	if err != nil {
 		return fmt.Errorf("load from raw: %w", err)
 	}

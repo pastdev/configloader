@@ -1,7 +1,6 @@
 package config
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -50,7 +49,7 @@ type DirSource struct {
 	Unmarshal UnmarshalFunc
 }
 
-func (s DirSource) Load(ctx context.Context, merge Merger) error {
+func (s DirSource) Load(lc LoadContext, merge Merger) error {
 	dir := normalizePath(s.Path)
 	listing, err := os.ReadDir(dir)
 	if err != nil {
@@ -126,8 +125,10 @@ func (s DirSource) Load(ctx context.Context, merge Merger) error {
 		}
 
 		files.Str(file)
+		fileLC := lc
+		fileLC.File = file
 		var doc any
-		err = unmarshal(withLoadFile(ctx, file), b, &doc, s.Unmarshal)
+		err = unmarshal(fileLC, b, &doc, s.Unmarshal)
 		if err != nil {
 			return fmt.Errorf("load from dir: %w", err)
 		}

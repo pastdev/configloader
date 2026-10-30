@@ -2,7 +2,6 @@
 package config_test
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -26,7 +25,7 @@ func TestYamlValueTemplateUnmarshal(t *testing.T) {
 	t.Run("object", func(t *testing.T) {
 		var valueMap map[any]any
 		err := unmarshal(
-			context.Background(),
+			config.LoadContext{},
 			[]byte(`---
 obj: '{{object "foo" "bar"}}'
 `),
@@ -38,7 +37,7 @@ obj: '{{object "foo" "bar"}}'
 	t.Run("number", func(t *testing.T) {
 		var actual map[any]any
 		err := unmarshal(
-			context.Background(),
+			config.LoadContext{},
 			[]byte(`---
 num: '{{number "1"}}'
 `),
@@ -50,7 +49,7 @@ num: '{{number "1"}}'
 	t.Run("creds", func(t *testing.T) {
 		var actual map[any]any
 		err := unmarshal(
-			context.Background(),
+			config.LoadContext{},
 			[]byte(`---
 creds:
   password: '{{password "example.com"}}'
@@ -71,7 +70,7 @@ creds:
 	t.Run("root scalar", func(t *testing.T) {
 		var actual any
 		err := unmarshal(
-			context.Background(),
+			config.LoadContext{},
 			[]byte(`'{{number "1"}}'`),
 			&actual)
 		require.NoError(t, err)

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -16,7 +15,7 @@ type FileSource struct {
 	Unmarshal UnmarshalFunc
 }
 
-func (s FileSource) Load(ctx context.Context, merge Merger) error {
+func (s FileSource) Load(lc LoadContext, merge Merger) error {
 	path := normalizePath(s.Path)
 	//nolint:gosec // intent is to allow user specified config file
 	b, err := os.ReadFile(path)
@@ -26,8 +25,9 @@ func (s FileSource) Load(ctx context.Context, merge Merger) error {
 		return nil
 	}
 
+	lc.File = path
 	var doc any
-	err = unmarshal(withLoadFile(ctx, path), b, &doc, s.Unmarshal)
+	err = unmarshal(lc, b, &doc, s.Unmarshal)
 	if err != nil {
 		return fmt.Errorf("load from file: %w", err)
 	}

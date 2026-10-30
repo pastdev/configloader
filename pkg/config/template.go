@@ -2,7 +2,6 @@ package config
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -23,37 +22,37 @@ func DefaultFuncMap() map[string]any {
 	funcs["home"] = home
 	funcs["user"] = currentUsername
 	funcs["userRaw"] = currentUsernameRaw
-	funcs["relativeFile"] = func(ctx context.Context) any {
+	funcs["relativeFile"] = func(lc LoadContext) any {
 		return func(path string, mode ...string) (string, error) {
-			return relativeFile(ctx, path, mode...)
+			return relativeFile(lc, path, mode...)
 		}
 	}
-	funcs["relativeDir"] = func(ctx context.Context) any {
+	funcs["relativeDir"] = func(lc LoadContext) any {
 		return func(path string, mode ...string) (string, error) {
-			return relativeDir(ctx, path, mode...)
+			return relativeDir(lc, path, mode...)
 		}
 	}
 	return funcs
 }
 
 // Template executes values as go templates using its func map. A func map
-// entry of type func(context.Context) any is treated as a factory for a
-// context-bound func: on each Execute it is called with the supplied ctx and
-// its result is used as the template func of that name.
+// entry of type func(LoadContext) any is treated as a factory for a
+// LoadContext bound func: on each Execute it is called with the supplied lc
+// and its result is used as the template func of that name.
 type Template struct {
 	funcMap    map[string]any
-	contextual map[string]func(context.Context) any
+	contextual map[string]func(LoadContext) any
 }
 
 type Executor interface {
 	// Executes the template stored in value and returns the result. The name
 	// value is intended for error reporting only to provide context as to
-	// which template failed. The ctx is the one supplied to the
+	// which template failed. The lc is the one supplied to the
 	// UnmarshalFunc.
-	Execute(ctx context.Context, name string, value any) (any, error)
+	Execute(lc LoadContext, name string, value any) (any, error)
 }
 
-func (t *Template) Execute(ctx context.Context, name string, value any) (any, error) {
+func (t *Template) Execute(lc LoadContext, name string, value any) (any, error) {
 	str, ok := value.(string)
 	if !ok || !strings.Contains(str, "{{") {
 		return value, nil
@@ -63,7 +62,7 @@ func (t *Template) Execute(ctx context.Context, name string, value any) (any, er
 	if len(t.contextual) > 0 {
 		bound := make(template.FuncMap, len(t.contextual))
 		for k, factory := range t.contextual {
-			bound[k] = factory(ctx)
+			bound[k] = factory(lc)
 		}
 		tmpl = tmpl.Funcs(bound)
 	}
@@ -90,9 +89,9 @@ func (t *Template) Execute(ctx context.Context, name string, value any) (any, er
 }
 
 func NewTemplate(funcMap template.FuncMap) *Template {
-	contextual := map[string]func(context.Context) any{}
+	contextual := map[string]func(LoadContext) any{}
 	for k, v := range funcMap {
-		if factory, ok := v.(func(context.Context) any); ok {
+		if factory, ok := v.(func(LoadContext) any); ok {
 			contextual[k] = factory
 		}
 	}
@@ -104,21 +103,21 @@ func NewTemplate(funcMap template.FuncMap) *Template {
 
 // Walk will recursively iterate over all the nodes of data calling callback
 // for each node.
-func Walk(ctx context.Context, callback Executor, data any) error {
-	_, err := walk(ctx, callback, data, []string{})
+func Walk(lc LoadContext, callback Executor, data any) error {
+	_, err := walk(lc, callback, data, []string{})
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func walk(ctx context.Context, callback Executor, node any, keyStack []string) (any, error) {
+func walk(lc LoadContext, callback Executor, node any, keyStack []string) (any, error) {
 	switch typed := node.(type) {
 	case map[string]any:
 		// json deserialized
 		for k, v := range typed {
 			keyStack := append(keyStack, fmt.Sprintf("%v", k))
-			newValue, err := walk(ctx, callback, v, keyStack)
+			newValue, err := walk(lc, callback, v, keyStack)
 			if err != nil {
 				return nil, fmt.Errorf("walk array: %w", err)
 			}
@@ -129,7 +128,7 @@ func walk(ctx context.Context, callback Executor, node any, keyStack []string) (
 		// yaml deserialized
 		for k, v := range typed {
 			keyStack := append(keyStack, fmt.Sprintf("%v", k))
-			newValue, err := walk(ctx, callback, v, keyStack)
+			newValue, err := walk(lc, callback, v, keyStack)
 			if err != nil {
 				return nil, fmt.Errorf("walk array: %w", err)
 			}
@@ -139,7 +138,7 @@ func walk(ctx context.Context, callback Executor, node any, keyStack []string) (
 	case []any:
 		for i, j := range typed {
 			keyStack := append(keyStack, strconv.Itoa(i))
-			newValue, err := walk(ctx, callback, j, keyStack)
+			newValue, err := walk(lc, callback, j, keyStack)
 			if err != nil {
 				return nil, fmt.Errorf("walk array: %w", err)
 			}
@@ -147,7 +146,7 @@ func walk(ctx context.Context, callback Executor, node any, keyStack []string) (
 		}
 		return typed, nil
 	default:
-		v, err := callback.Execute(ctx, fmt.Sprintf("/%s", strings.Join(keyStack, "/")), node)
+		v, err := callback.Execute(lc, fmt.Sprintf("/%s", strings.Join(keyStack, "/")), node)
 		if err != nil {
 			return nil, fmt.Errorf("execute template: %w", err)
 		}
@@ -164,7 +163,7 @@ func walk(ctx context.Context, callback Executor, node any, keyStack []string) (
 //	*map[string]any
 //	*[]any
 func YamlValueTemplateUnmarshal(executor Executor) UnmarshalFunc {
-	return func(ctx context.Context, b []byte, doc any) error {
+	return func(lc LoadContext, b []byte, doc any) error {
 		err := yaml.Unmarshal(b, doc)
 		if err != nil {
 			return fmt.Errorf("yamlunmarshal: %w", err)
@@ -181,7 +180,7 @@ func YamlValueTemplateUnmarshal(executor Executor) UnmarshalFunc {
 			// replace the root of the value in case it was a scalar. all other
 			// cases just replace within the map/slice so no need to replace
 			// root
-			value, err := walk(ctx, exec, *typed, []string{})
+			value, err := walk(lc, exec, *typed, []string{})
 			if err != nil {
 				return fmt.Errorf("yamlunmarshal walk valueMap: %w", err)
 			}
@@ -189,21 +188,21 @@ func YamlValueTemplateUnmarshal(executor Executor) UnmarshalFunc {
 			return nil
 
 		case *map[any]any:
-			err := Walk(ctx, exec, *typed)
+			err := Walk(lc, exec, *typed)
 			if err != nil {
 				return fmt.Errorf("yamlunmarshal walk valueMap: %w", err)
 			}
 			return nil
 
 		case *map[string]any:
-			err := Walk(ctx, exec, *typed)
+			err := Walk(lc, exec, *typed)
 			if err != nil {
 				return fmt.Errorf("yamlunmarshal walk valueMap: %w", err)
 			}
 			return nil
 
 		case *[]any:
-			err := Walk(ctx, exec, *typed)
+			err := Walk(lc, exec, *typed)
 			if err != nil {
 				return fmt.Errorf("yamlunmarshal walk valueMap: %w", err)
 			}

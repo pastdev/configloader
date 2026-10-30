@@ -2,7 +2,6 @@
 package config_test
 
 import (
-	"context"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -38,7 +37,7 @@ func TestHomeAndUserTemplateFuncs(t *testing.T) {
 	require.NoError(t, err)
 
 	var actual map[any]any
-	err = unmarshal(context.Background(), []byte(`
+	err = unmarshal(config.LoadContext{}, []byte(`
 home: '{{ home }}'
 user: '{{ user }}'
 `), &actual)
