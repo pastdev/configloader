@@ -25,7 +25,7 @@ func ExampleSources_Load() {
 			config.RawSource{
 				Data: []byte(`{"foo":"baz"}`),
 				// can customize unmarshaler, by default its yaml...
-				Unmarshal: json.Unmarshal,
+				Unmarshal: config.WrapUnmarshal(json.Unmarshal),
 			},
 		},
 	}

@@ -25,6 +25,13 @@ if err := sources.Load(&cfg); err != nil {
 
 See the [example](./pkg/config/example_test.go) or [tests](./pkg/config/config_test.go) for more use cases.
 
+### Source paths
+
+`FileSource.Path` and `DirSource.Path` expand a leading `~/` to the current user's home directory (`os.UserHomeDir`):
+
+* only a leading `~/` is expanded; a bare `~` or `~user` is used as is
+* if the home directory cannot be determined, the path is used unchanged
+
 ### Merge behavior
 
 Config is merged as a generic document before conversion into your target type.
@@ -66,20 +73,22 @@ exclude:
 
 By default, [`YamlUnmarshal`](./pkg/config/config.go) is used to decode each source into an intermediate document.
 
-You can replace that with a custom unmarshaler if you would like:
+You can replace that with a custom [`UnmarshalFunc`](./pkg/config/config.go) if you would like.
+`config.WrapUnmarshal` adapts a `LoadContext` free func like `json.Unmarshal`:
 
 ```go
 sources := config.Sources[map[string]any]{
     Sources: []config.SourceLoader{
         config.FileSource{
-            Path: "~/.config/configloader.json",
-            Unmarshal: func(b []byte, cfg any) error {
-                return json.Unmarshal(b, cfg)
-            },
+            Path:      "~/.config/configloader.json",
+            Unmarshal: config.WrapUnmarshal(json.Unmarshal),
         },
     },
 }
 ```
+
+The `LoadContext` given to an `UnmarshalFunc` carries per-load information (the file being read and the config dirs of the current `Sources`) used by template functions like `relativeFile`.
+A custom `UnmarshalFunc` that templates values should pass it along to `config.Walk` or its `Executor`.
 
 ### Converting the merged document
 
@@ -126,13 +135,44 @@ sources := config.Sources[AppConfig]{
 * `*map[string]any`
 * `*[]any`
 
-The `config.DefaultFuncMap()` contains utility functions for accessing secrets from various password managers and XDG helpers, including:
+The `config.DefaultFuncMap()` contains utility functions for accessing secrets from various password managers, the current user, the loader itself, and XDG directories.
+It is assembled from these collections, each of which can also be added to a func map on its own:
 
-* [bitwarden](#bitwarden)
-* [lastpass](#lastpass)
-* [xdg](#xdg)
+* [base](#base) — `config.AddBaseFuncs`
+* [bitwarden](#bitwarden) — `bitwarden.New().AddFuncs`
+* [lastpass](#lastpass) — `lastpass.New().AddFuncs`
+* [meta](#meta) — `meta.AddFuncs`
+* [xdg](#xdg) — `xdg.AddFuncs`
 
-This map can be added to, or replaced.
+The map can be added to, or replaced with only the collections you need:
+
+```go
+funcs := map[string]any{}
+config.AddBaseFuncs(funcs)
+meta.AddFuncs(funcs)
+xdg.AddFuncs(funcs)
+
+unmarshal := config.YamlValueTemplateUnmarshal(config.NewTemplate(funcs))
+```
+
+#### Base
+
+`config.AddBaseFuncs` adds:
+
+* `home` — `os.UserHomeDir`
+* `user` — `user.Current().Username`, lowercased with any `DOMAIN\` prefix removed
+* `userRaw` — `user.Current().Username` as reported by the OS
+
+Each accepts an optional fallback that is used if the OS lookup fails, otherwise they return an error.
+They are not XDG bases; see [xdg](#xdg) for those.
+
+```gotemplate
+{{ home }}
+{{ home "/tmp" }}
+{{ user }}
+{{ user "nobody" }}
+{{ userRaw }}
+```
 
 #### Bitwarden
 
@@ -144,9 +184,46 @@ The template functions assume you have an _active session_ (ie: `rbw unlock`) fr
 To use the lastpass template functions, you need to install the [`lastpass-cli`](https://github.com/lastpass/lastpass-cli) client.
 The template functions assume you have an _active session_ (ie: `lpass login <USER>`) from which it will obtain the secrets.
 
+#### Meta
+
+`meta.AddFuncs` adds functions that expose metadata from the loader itself:
+
+* `relativeFile`
+* `relativeDir`
+
+```gotemplate
+{{ relativeFile "keys/gitlab.token" }}
+{{ relativeFile "ts/filters/audit.ts" "last" }}
+{{ relativeDir "ts" "last" }}
+```
+
+`relativeFile` and `relativeDir` take a relative path and an optional string mode.
+Mode is one of `this`, `first`, or `last`.
+Default is `this` when the argument is omitted.
+
+* `this`: join the path with the directory of the YAML file currently being read
+* `first`: walk config dirs in load order and take the first existing match (earliest source wins)
+* `last`: same walk, take the last existing match (later overlay wins)
+
+`relativeFile` must resolve to a file.
+`relativeDir` must resolve to a directory.
+Unknown modes, absolute paths, paths containing `..`, and missing matches all error.
+
+Config dirs used by `first` and `last` come from the current `Sources` list, in load order, after [`~/` expansion](#source-paths):
+
+* for `FileSource`, the config dir is `filepath.Dir` of that file
+* for `DirSource`, the config dir is the directory itself
+* for a source that wraps another (implements `config.WrappedSourceLoader`, such as `cobra.BaseSource`), the config dir of the wrapped source
+
+A later directory can supply the file even when it did not mention the path in YAML.
+That overlay case looks like an earlier config naming `{{ relativeFile "ts/filters/audit.ts" "last" }}`, with a later config dir overriding only the file contents.
+
+These functions read the `config.LoadContext` of the load in progress, so they are intended to be used through `Sources.Load` (or `FileSource`/`DirSource` `Load`) with `YamlValueTemplateUnmarshal`.
+The `LoadContext` is passed explicitly through each load, so concurrent loads are independent.
+
 #### XDG
 
-The default template function map also includes XDG helpers:
+`xdg.AddFuncs` adds XDG helpers:
 
 * `xdgBinHome`
 * `xdgCacheHome`

@@ -11,12 +11,21 @@ type baseSourceLoader struct {
 	config.SourceLoader
 }
 
+var _ config.WrappedSourceLoader = baseSourceLoader{}
+
 // BaseSourceLoader is simply a marker function allowing the isBaseSource to
 // determine if this is should be treated as a _base_ source.
 func (baseSourceLoader) BaseSourceLoader() {}
 
 func BaseSource(src config.SourceLoader) config.SourceLoader {
 	return baseSourceLoader{SourceLoader: src}
+}
+
+// InnerSource implements config.WrappedSourceLoader so the config dir of the
+// wrapped FileSource or DirSource is still searched by relativeFile and
+// relativeDir.
+func (b baseSourceLoader) InnerSource() config.SourceLoader {
+	return b.SourceLoader
 }
 
 func isBaseSource(src config.SourceLoader) bool {

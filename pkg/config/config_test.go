@@ -345,11 +345,11 @@ apps:
 			Sources: []config.SourceLoader{
 				config.RawSource{
 					Data:      []byte(`{"not_foo":"bar","not_hip":"hop"}`),
-					Unmarshal: json.Unmarshal,
+					Unmarshal: config.WrapUnmarshal(json.Unmarshal),
 				},
 				config.RawSource{
 					Data:      []byte(`{"not_foo":"baz"}`),
-					Unmarshal: json.Unmarshal,
+					Unmarshal: config.WrapUnmarshal(json.Unmarshal),
 				},
 			},
 		}.Test(t, cfg{Foo: "baz", Hip: "hop"}, actual)
@@ -380,11 +380,11 @@ apps:
 			Sources: []config.SourceLoader{
 				config.RawSource{
 					Data:      []byte(`{"apps":{"default":{"user":{"name":"me","shell":"/bin/bash"}}}}`),
-					Unmarshal: json.Unmarshal,
+					Unmarshal: config.WrapUnmarshal(json.Unmarshal),
 				},
 				config.RawSource{
 					Data:      []byte(`{"apps":{"default":{"user":{"name":"not_me"}}}}`),
-					Unmarshal: json.Unmarshal,
+					Unmarshal: config.WrapUnmarshal(json.Unmarshal),
 				},
 			},
 		}.Test(t,

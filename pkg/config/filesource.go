@@ -12,19 +12,22 @@ type FileSource struct {
 	Path string
 	// Unmarshal is the function to unmarshal the data from file.
 	// If not specified YamlUnmarshal will be used.
-	Unmarshal func(b []byte, cfg any) error
+	Unmarshal UnmarshalFunc
 }
 
-func (s FileSource) Load(merge Merger) error {
-	b, err := os.ReadFile(normalizePath(s.Path))
+func (s FileSource) Load(lc LoadContext, merge Merger) error {
+	path := normalizePath(s.Path)
+	//nolint:gosec // intent is to allow user specified config file
+	b, err := os.ReadFile(path)
 	if err != nil {
 		log.Logger.Debug().Str("file", s.Path).Msg("config not found")
 		//nolint: nilerr // intentional ignore error
 		return nil
 	}
 
+	lc.File = path
 	var doc any
-	err = unmarshal(b, &doc, s.Unmarshal)
+	err = unmarshal(lc, b, &doc, s.Unmarshal)
 	if err != nil {
 		return fmt.Errorf("load from file: %w", err)
 	}

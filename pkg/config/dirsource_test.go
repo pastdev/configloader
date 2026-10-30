@@ -27,7 +27,7 @@ func TestDirSourceLoad(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		err := (config.DirSource{Path: dir}).Load(func(any) {})
+		err := (config.DirSource{Path: dir}).Load(config.LoadContext{}, func(any) {})
 		require.Error(t, err)
 	}
 

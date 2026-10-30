@@ -46,10 +46,10 @@ type DirSource struct {
 	Path string
 	// Unmarshal is the function to unmarshal the data from each file in the
 	// directory. If not specified YamlUnmarshal will be used.
-	Unmarshal func(b []byte, cfg any) error
+	Unmarshal UnmarshalFunc
 }
 
-func (s DirSource) Load(merge Merger) error {
+func (s DirSource) Load(lc LoadContext, merge Merger) error {
 	dir := normalizePath(s.Path)
 	listing, err := os.ReadDir(dir)
 	if err != nil {
@@ -125,8 +125,10 @@ func (s DirSource) Load(merge Merger) error {
 		}
 
 		files.Str(file)
+		fileLC := lc
+		fileLC.File = file
 		var doc any
-		err = unmarshal(b, &doc, s.Unmarshal)
+		err = unmarshal(fileLC, b, &doc, s.Unmarshal)
 		if err != nil {
 			return fmt.Errorf("load from dir: %w", err)
 		}

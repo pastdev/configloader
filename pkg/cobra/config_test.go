@@ -19,7 +19,7 @@ func TestAddOverride(t *testing.T) {
 		Enabled bool   `yaml:"enabled"`
 	}
 
-	unmarshal := yaml.Unmarshal
+	unmarshal := config.WrapUnmarshal(yaml.Unmarshal)
 
 	writeTestFS := func(t *testing.T, files map[string]string) string {
 		t.Helper()
@@ -193,7 +193,7 @@ func TestPersistentFlags(t *testing.T) {
 		Enabled bool   `yaml:"enabled"`
 	}
 
-	unmarshal := yaml.Unmarshal
+	unmarshal := config.WrapUnmarshal(yaml.Unmarshal)
 
 	writeTestFS := func(t *testing.T, files map[string]string) string {
 		t.Helper()
