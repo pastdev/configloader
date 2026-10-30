@@ -1,13 +1,14 @@
-package config
+// Package meta provides template functions that expose metadata from the
+// config loader itself, such as the file currently being loaded and the
+// config directories of the current sources.
+package meta
 
 import (
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
-
-	"github.com/pastdev/configloader/internal/fallback"
+	"text/template"
 )
 
 const (
@@ -16,58 +17,44 @@ const (
 	relativeModeLast  = "last"
 )
 
-var (
-	osUserHomeDir = os.UserHomeDir
-	userCurrent   = user.Current
-)
+// LoadContext is the per-load information supplied to each SourceLoader,
+// UnmarshalFunc, and Executor. Template funcs such as relativeFile use it to
+// resolve paths relative to config sources.
+type LoadContext struct {
+	// File is the file currently being unmarshaled (for "this"). It is empty
+	// for sources that are not backed by a file, such as RawSource.
+	File string
+	// Dirs is the config directories of the current Sources list, in load
+	// order, after ~/ expansion (for "first" and "last").
+	Dirs []string
+}
 
-// home returns os.UserHomeDir. If that fails, the optional fallback is used if
-// supplied.
-func home(fallbacks ...string) (string, error) {
-	h, err := osUserHomeDir()
-	if err != nil {
-		if v, ok := fallback.First(fallbacks...); ok {
-			return v, nil
+// AddFuncs adds relativeFile and relativeDir to funcs. Each is added as a
+// func(LoadContext) any factory, which config.Template binds to the
+// LoadContext of the load in progress.
+func AddFuncs(funcs template.FuncMap) {
+	funcs["relativeFile"] = func(lc LoadContext) any {
+		return func(path string, mode ...string) (string, error) {
+			return RelativeFile(lc, path, mode...)
 		}
-		return "", fmt.Errorf("home: %w", err)
 	}
-	return h, nil
-}
-
-// currentUsername returns the current username lowercased and with any
-// windows domain prefix (DOMAIN\) removed. If the lookup fails, the optional
-// fallback is used if supplied.
-func currentUsername(fallbacks ...string) (string, error) {
-	username, err := currentUsernameRaw(fallbacks...)
-	if err != nil {
-		return "", err
-	}
-
-	username = strings.ToLower(username)
-	if idx := strings.Index(username, "\\"); idx != -1 {
-		username = username[idx+1:]
-	}
-	return username, nil
-}
-
-// currentUsernameRaw returns the current username as reported by the OS. If
-// the lookup fails, the optional fallback is used if supplied.
-func currentUsernameRaw(fallbacks ...string) (string, error) {
-	u, err := userCurrent()
-	if err != nil {
-		if v, ok := fallback.First(fallbacks...); ok {
-			return v, nil
+	funcs["relativeDir"] = func(lc LoadContext) any {
+		return func(path string, mode ...string) (string, error) {
+			return RelativeDir(lc, path, mode...)
 		}
-		return "", fmt.Errorf("user: %w", err)
 	}
-	return u.Username, nil
 }
 
-func relativeFile(lc LoadContext, path string, mode ...string) (string, error) {
+// RelativeFile resolves path, which must be relative and may not contain
+// "..", to an existing file using lc. The optional mode is one of "this"
+// (default: relative to the directory of lc.File), "first" (the first match
+// along lc.Dirs), or "last" (the last match along lc.Dirs).
+func RelativeFile(lc LoadContext, path string, mode ...string) (string, error) {
 	return resolveRelative(lc, "relativeFile", path, false, mode...)
 }
 
-func relativeDir(lc LoadContext, path string, mode ...string) (string, error) {
+// RelativeDir is RelativeFile for a directory.
+func RelativeDir(lc LoadContext, path string, mode ...string) (string, error) {
 	return resolveRelative(lc, "relativeDir", path, true, mode...)
 }
 

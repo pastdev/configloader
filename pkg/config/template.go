@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/user"
 	"strconv"
 	"strings"
 	"text/template"
 
+	"github.com/pastdev/configloader/internal/fallback"
 	"github.com/pastdev/configloader/pkg/bitwarden"
 	"github.com/pastdev/configloader/pkg/lastpass"
+	"github.com/pastdev/configloader/pkg/meta"
 	"github.com/pastdev/configloader/pkg/xdg"
 	"gopkg.in/yaml.v3"
 )
@@ -19,20 +23,63 @@ func DefaultFuncMap() map[string]any {
 	bitwarden.New().AddFuncs(funcs)
 	lastpass.New().AddFuncs(funcs)
 	xdg.AddFuncs(funcs)
+	AddBaseFuncs(funcs)
+	meta.AddFuncs(funcs)
+	return funcs
+}
+
+// AddBaseFuncs adds home, user, and userRaw to funcs.
+func AddBaseFuncs(funcs template.FuncMap) {
 	funcs["home"] = home
 	funcs["user"] = currentUsername
 	funcs["userRaw"] = currentUsernameRaw
-	funcs["relativeFile"] = func(lc LoadContext) any {
-		return func(path string, mode ...string) (string, error) {
-			return relativeFile(lc, path, mode...)
+}
+
+var (
+	osUserHomeDir = os.UserHomeDir
+	userCurrent   = user.Current
+)
+
+// home returns os.UserHomeDir. If that fails, the optional fallback is used if
+// supplied.
+func home(fallbacks ...string) (string, error) {
+	h, err := osUserHomeDir()
+	if err != nil {
+		if v, ok := fallback.First(fallbacks...); ok {
+			return v, nil
 		}
+		return "", fmt.Errorf("home: %w", err)
 	}
-	funcs["relativeDir"] = func(lc LoadContext) any {
-		return func(path string, mode ...string) (string, error) {
-			return relativeDir(lc, path, mode...)
+	return h, nil
+}
+
+// currentUsername returns the current username lowercased and with any
+// windows domain prefix (DOMAIN\) removed. If the lookup fails, the optional
+// fallback is used if supplied.
+func currentUsername(fallbacks ...string) (string, error) {
+	username, err := currentUsernameRaw(fallbacks...)
+	if err != nil {
+		return "", err
+	}
+
+	username = strings.ToLower(username)
+	if idx := strings.Index(username, "\\"); idx != -1 {
+		username = username[idx+1:]
+	}
+	return username, nil
+}
+
+// currentUsernameRaw returns the current username as reported by the OS. If
+// the lookup fails, the optional fallback is used if supplied.
+func currentUsernameRaw(fallbacks ...string) (string, error) {
+	u, err := userCurrent()
+	if err != nil {
+		if v, ok := fallback.First(fallbacks...); ok {
+			return v, nil
 		}
+		return "", fmt.Errorf("user: %w", err)
 	}
-	return funcs
+	return u.Username, nil
 }
 
 // Template executes values as go templates using its func map. A func map

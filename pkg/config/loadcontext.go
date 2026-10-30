@@ -2,19 +2,13 @@ package config
 
 import (
 	"path/filepath"
+
+	"github.com/pastdev/configloader/pkg/meta"
 )
 
 // LoadContext is the per-load information supplied to each SourceLoader,
-// UnmarshalFunc, and Executor. Template funcs such as relativeFile use it to
-// resolve paths relative to config sources.
-type LoadContext struct {
-	// File is the file currently being unmarshaled (for "this"). It is empty
-	// for sources that are not backed by a file, such as RawSource.
-	File string
-	// Dirs is the config directories of the current Sources list, in load
-	// order, after normalizePath (for "first" and "last").
-	Dirs []string
-}
+// UnmarshalFunc, and Executor. See meta.LoadContext.
+type LoadContext = meta.LoadContext
 
 func configDirs(sources []SourceLoader) []string {
 	var dirs []string
