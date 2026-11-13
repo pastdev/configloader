@@ -51,26 +51,38 @@ func (c *ConfigLoader[T]) Config() (*T, error) {
 	return &c.config, nil
 }
 
-// Load loads the configuration. If sources were set using the persistent flags,
-// then the DefaultSources will be ignored except for any marked base sources.
-// The final Convert function is always inherited from DefaultSources unless
-// explicitly replaced by the caller beforehand.
-func (c *ConfigLoader[T]) load() error {
+// Dirs returns the config directories of the sources that Config loads, in
+// load order, after ~/ expansion. It applies the same flag and BaseSource rule
+// as Config, so it must be called after the flags are parsed, such as from a
+// command's RunE.
+func (c *ConfigLoader[T]) Dirs() []string {
+	return c.effectiveSources().Dirs()
+}
+
+// effectiveSources returns the sources to load. If sources were set using the
+// persistent flags, then the DefaultSources will be ignored except for any
+// marked base sources. The final Convert function is always inherited from
+// DefaultSources unless explicitly replaced by the caller beforehand.
+func (c *ConfigLoader[T]) effectiveSources() config.Sources[T] {
+	if len(c.sources) == 0 {
+		return c.DefaultSources
+	}
+
 	sources := config.Sources[T]{
 		Convert: c.DefaultSources.Convert,
 	}
-
-	if len(c.sources) == 0 {
-		sources = c.DefaultSources
-	} else {
-		for _, src := range c.DefaultSources.Sources {
-			if isBaseSource(src) {
-				sources.Sources = append(sources.Sources, src)
-			}
+	for _, src := range c.DefaultSources.Sources {
+		if isBaseSource(src) {
+			sources.Sources = append(sources.Sources, src)
 		}
-		sources.Sources = append(sources.Sources, c.sources...)
 	}
+	sources.Sources = append(sources.Sources, c.sources...)
+	return sources
+}
 
+// load loads the configuration from the effectiveSources.
+func (c *ConfigLoader[T]) load() error {
+	sources := c.effectiveSources()
 	if err := sources.Load(&c.config); err != nil {
 		return fmt.Errorf("configloader load sources: %w", err)
 	}

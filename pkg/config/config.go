@@ -53,7 +53,7 @@ type Sources[T any] struct {
 // supplied cfg object.
 func (s Sources[T]) Load(cfg *T) error {
 	start := time.Now()
-	lc := LoadContext{Dirs: configDirs(s.Sources)}
+	lc := LoadContext{Dirs: s.Dirs()}
 
 	var merged any
 	merger := func(doc any) {
@@ -83,6 +83,13 @@ func (s Sources[T]) Load(cfg *T) error {
 
 	log.Logger.Debug().Dur("duration", time.Since(start)).Msg("load complete")
 	return nil
+}
+
+// Dirs returns the config directories of the Sources, in load order, after
+// ~/ expansion. These are the directories that relativeFile and relativeDir
+// search in "first" and "last" modes. See LoadContext.Dirs.
+func (s Sources[T]) Dirs() []string {
+	return configDirs(s.Sources)
 }
 
 func normalizePath(path string) string {

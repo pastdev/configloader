@@ -393,3 +393,88 @@ name: from-file
 		)
 	})
 }
+
+func TestConfigLoaderDirs(t *testing.T) {
+	unmarshal := config.WrapUnmarshal(yaml.Unmarshal)
+
+	tester := func(
+		t *testing.T,
+		defaults []config.SourceLoader,
+		flags []string,
+		expected []string,
+	) {
+		t.Helper()
+
+		loader := &ConfigLoader[map[string]any]{
+			DefaultSources: config.Sources[map[string]any]{Sources: defaults},
+		}
+
+		var got []string
+
+		root := &cobracmd.Command{
+			Use:           "test",
+			SilenceErrors: true,
+			SilenceUsage:  true,
+			RunE: func(_ *cobracmd.Command, _ []string) error {
+				got = loader.Dirs()
+				return nil
+			},
+		}
+
+		pf := loader.PersistentFlags(root)
+		pf.FileSourceVarP(unmarshal, "config", "c", "config files")
+		pf.DirSourceVarP(unmarshal, "config-dir", "d", "config directories")
+
+		root.SetArgs(flags)
+
+		if _, err := root.ExecuteC(); err != nil {
+			t.Fatalf("execute %v: %v", flags, err)
+		}
+
+		if !reflect.DeepEqual(got, expected) {
+			t.Fatalf("got %v, want %v", got, expected)
+		}
+	}
+
+	defaults := []config.SourceLoader{
+		config.FileSource{Path: "/etc/app/config.yml"},
+		config.DirSource{Path: "/etc/app.d"},
+	}
+
+	t.Run("no flags", func(t *testing.T) {
+		tester(t, defaults, []string{}, []string{"/etc/app", "/etc/app.d"})
+	})
+
+	t.Run("config-dir flag replaces defaults", func(t *testing.T) {
+		tester(
+			t,
+			defaults,
+			[]string{"--config-dir", "/flag/a.d", "--config-dir", "/flag/b.d"},
+			[]string{"/flag/a.d", "/flag/b.d"},
+		)
+	})
+
+	t.Run("config-dir flag after base default", func(t *testing.T) {
+		tester(
+			t,
+			append([]config.SourceLoader{BaseSource(config.DirSource{Path: "/base.d"})}, defaults...),
+			[]string{"--config-dir", "/flag.d"},
+			[]string{"/base.d", "/flag.d"},
+		)
+	})
+
+	t.Run("config flag", func(t *testing.T) {
+		tester(t, defaults, []string{"--config", "/flag/config.yml"}, []string{"/flag"})
+	})
+
+	t.Run("home is expanded", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		tester(
+			t,
+			defaults,
+			[]string{"--config-dir", "~/app.d"},
+			[]string{filepath.Join(home, "app.d")},
+		)
+	})
+}
