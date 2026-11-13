@@ -144,6 +144,8 @@ It is assembled from these collections, each of which can also be added to a fun
 * [meta](#meta) — `meta.AddFuncs`
 * [xdg](#xdg) — `xdg.AddFuncs`
 
+The [urlfile](#urlfile) collection is not in `config.DefaultFuncMap()`, because it needs an application specific cache directory.
+
 The map can be added to, or replaced with only the collections you need:
 
 ```go
@@ -218,8 +220,44 @@ Config dirs used by `first` and `last` come from the current `Sources` list, in 
 A later directory can supply the file even when it did not mention the path in YAML.
 That overlay case looks like an earlier config naming `{{ relativeFile "ts/filters/audit.ts" "last" }}`, with a later config dir overriding only the file contents.
 
+The same directories are available outside of templates from `Sources.Dirs()`, or from [`ConfigLoader.Dirs()`](#effective-config-dirs) for the sources a cobra command actually loads.
+
 These functions read the `config.LoadContext` of the load in progress, so they are intended to be used through `Sources.Load` (or `FileSource`/`DirSource` `Load`) with `YamlValueTemplateUnmarshal`.
 The `LoadContext` is passed explicitly through each load, so concurrent loads are independent.
+
+#### urlfile
+
+`urlfile.New(dir).AddFuncs` adds `urlFile`, which downloads a file once and returns the **path** of a cached copy:
+
+```go
+cacheHome, err := xdg.CacheHome()
+if err != nil {
+    return err
+}
+
+funcs := config.DefaultFuncMap()
+urlfile.New(filepath.Join(cacheHome, "my-app", "url")).AddFuncs(funcs)
+```
+
+```gotemplate
+{{ urlFile "https://host/path/chain.txt?ref=main" "chain.pem" }}
+{{ urlFile "https://host/path/chain.txt?ref=main" "chain.pem" "24h" }}
+```
+
+Arguments are the URL, a file name, and an optional TTL (a go duration, default `24h`):
+
+* only `https` URLs with a host are accepted
+* the name is required and must be a plain file name, since URLs make poor file names and some consumers pick a parser by extension
+* the copy lives at `<dir>/<sha256 of url>/<name>`, so two URLs never collide even with the same name
+* a copy younger than the TTL is returned with no network call
+* an older or missing copy is downloaded, with a 30 second timeout and a required `200` response
+* if a refetch fails and an older copy exists, that copy is returned and a warning is logged, so offline loads keep working
+* with no copy, it returns an error naming the URL
+
+Downloads are written to a temporary file in the same directory, synced, then renamed over the cached path, so the cached path either does not exist or holds a complete download.
+The content itself is not validated (a captive portal page served with `200` is a complete download), so whatever consumes the file should check it.
+
+Templates are evaluated on every load for every value, so whichever load first sees an expired copy pays for the refetch.
 
 #### XDG
 
@@ -366,6 +404,25 @@ In this example:
 * the embedded `RawSource` is always loaded
 * the default config directories are loaded only when no explicit config flags are provided
 * any explicit `--config` or `--config-dir` sources are loaded after the base source and therefore override it
+
+### Effective config dirs
+
+`ConfigLoader.Dirs()` returns the config directories of the sources that `Config()` loads, in load order, after [`~/` expansion](#source-paths).
+It applies the same flag and `BaseSource` rule as `Config()`, so it must be called after the flags are parsed, such as from a command's `RunE`.
+This is useful for finding files that sit next to the config but are not config themselves:
+
+```go
+    RunE: func(_ *cobra.Command, _ []string) error {
+        for _, dir := range cfgldr.Dirs() {
+            scripts := filepath.Join(dir, "ts")
+            ...
+        }
+    },
+```
+
+With the `BaseSource` example above and `--config-dir ./local.d`, that is only `./local.d`, since the base source is a `RawSource` with no directory.
+Without flags, it is `/etc/my-app.d` then `~/.config/my-app.d` expanded.
+The directories follow the same rules as the [`relativeFile` and `relativeDir` config dirs](#meta).
 
 ### Flag value overrides
 

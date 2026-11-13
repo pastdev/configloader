@@ -195,3 +195,53 @@ func TestLoadContext(t *testing.T) {
 		}
 	})
 }
+
+func TestSourcesDirs(t *testing.T) {
+	tester := func(t *testing.T, expected []string, sources ...config.SourceLoader) {
+		t.Helper()
+		require.Equal(t, expected, config.Sources[any]{Sources: sources}.Dirs())
+	}
+
+	t.Run("dirs of each source in load order", func(t *testing.T) {
+		tester(
+			t,
+			[]string{"/etc/app", "/etc/app.d", "/home/u/app", "/home/u/app.d"},
+			config.FileSource{Path: "/etc/app/config.yml"},
+			config.DirSource{Path: "/etc/app.d"},
+			&config.FileSource{Path: "/home/u/app/config.yml"},
+			&config.DirSource{Path: "/home/u/app.d"},
+		)
+	})
+
+	t.Run("sources without a dir are skipped", func(t *testing.T) {
+		tester(
+			t,
+			[]string{"/etc/app.d"},
+			config.RawSource{Data: []byte("a: b")},
+			config.DirSource{Path: "/etc/app.d"},
+		)
+	})
+
+	t.Run("wrapped sources use the inner dir", func(t *testing.T) {
+		tester(
+			t,
+			[]string{"/etc/app.d"},
+			innerSource{SourceLoader: config.DirSource{Path: "/etc/app.d"}},
+		)
+	})
+
+	t.Run("no sources", func(t *testing.T) {
+		tester(t, nil)
+	})
+
+	t.Run("home is expanded", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		tester(
+			t,
+			[]string{filepath.Join(home, ".config", "app.d"), filepath.Join(home, ".config")},
+			config.DirSource{Path: "~/.config/app.d"},
+			config.FileSource{Path: "~/.config/app.yml"},
+		)
+	})
+}
