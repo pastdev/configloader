@@ -50,9 +50,9 @@ func AddFuncs(funcs template.FuncMap) {
 }
 
 // RelativeFile resolves path, which must be relative and may not contain
-// "..", to an existing file using lc. The optional mode is one of "this"
-// (default: relative to the directory of lc.File), "first" (the first match
-// along lc.Dirs), or "last" (the last match along lc.Dirs).
+// "..", to the absolute path of an existing file using lc. The optional mode
+// is one of "this" (default: relative to the directory of lc.File), "first"
+// (the first match along lc.Dirs), or "last" (the last match along lc.Dirs).
 func RelativeFile(lc LoadContext, path string, mode ...string) (string, error) {
 	return resolveRelative(lc, "relativeFile", path, false, mode...)
 }
@@ -173,31 +173,24 @@ func resolveAlongDirs(lc LoadContext, rel string, wantDir, last bool) (string, e
 	return match, nil
 }
 
-func joinUnder(base, rel string) (string, error) {
-	joined := filepath.Join(base, filepath.Clean(rel))
-	if err := pathEscapesBase(base, joined); err != nil {
-		return "", err
-	}
-	return joined, nil
-}
-
-func pathEscapesBase(base, joined string) error {
+func joinUnder(base, path string) (string, error) {
 	absBase, err := filepath.Abs(base)
 	if err != nil {
-		return fmt.Errorf("abs base %q: %w", base, err)
+		return "", fmt.Errorf("abs base %q: %w", base, err)
 	}
+	joined := filepath.Join(base, filepath.Clean(path))
 	absJoined, err := filepath.Abs(joined)
 	if err != nil {
-		return fmt.Errorf("abs path %q: %w", joined, err)
+		return "", fmt.Errorf("abs path %q: %w", joined, err)
 	}
 	rel, err := filepath.Rel(absBase, absJoined)
 	if err != nil {
-		return fmt.Errorf("rel %q from %q: %w", absJoined, absBase, err)
+		return "", fmt.Errorf("rel %q from %q: %w", absJoined, absBase, err)
 	}
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("path escapes base %q", base)
+		return "", fmt.Errorf("path escapes base %q", base)
 	}
-	return nil
+	return absJoined, nil
 }
 
 func checkRelativeType(rel, resolved string, wantDir bool) (string, error) {

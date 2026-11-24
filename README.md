@@ -209,7 +209,8 @@ Default is `this` when the argument is omitted.
 
 `relativeFile` must resolve to a file.
 `relativeDir` must resolve to a directory.
-Unknown modes, absolute paths, paths containing `..`, and missing matches all error.
+Both functions return an absolute path in every mode.
+Unknown modes, absolute input paths, paths containing `..`, and missing matches all error.
 
 Config dirs used by `first` and `last` come from the current `Sources` list, in load order, after [`~/` expansion](#source-paths):
 

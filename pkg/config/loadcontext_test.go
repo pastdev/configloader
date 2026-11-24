@@ -133,6 +133,46 @@ func TestLoadContext(t *testing.T) {
 		require.Equal(t, userTS, actual["scripts"])
 	})
 
+	t.Run("relative sources resolve to absolute paths", func(t *testing.T) {
+		root := t.TempDir()
+		write(t, root, map[string]string{
+			"system/config.yml": `
+thisDir: '{{ relativeDir "assets" }}'
+thisFile: '{{ relativeFile "assets/script.ts" "this" }}'
+firstDir: '{{ relativeDir "assets" "first" }}'
+firstFile: '{{ relativeFile "assets/script.ts" "first" }}'
+lastDir: '{{ relativeDir "assets" "last" }}'
+lastFile: '{{ relativeFile "assets/script.ts" "last" }}'
+`,
+			"system/assets/script.ts": "system",
+			"user/assets/script.ts":   "user",
+			"system/escape.yml":       `dir: '{{ relativeDir "../user/assets" }}'` + "\n",
+		})
+		t.Chdir(root)
+
+		actual := load(t,
+			config.FileSource{Path: filepath.Join("system", "config.yml"), Unmarshal: unmarshal},
+			config.DirSource{Path: "user"},
+		)
+		err := loadErr(t, config.FileSource{
+			Path:      filepath.Join("system", "escape.yml"),
+			Unmarshal: unmarshal,
+		})
+		require.ErrorContains(t, err, "parent directory segment")
+
+		t.Chdir(t.TempDir())
+		systemAssets := filepath.Join(root, "system", "assets")
+		userAssets := filepath.Join(root, "user", "assets")
+		require.Equal(t, map[any]any{
+			"thisDir":   systemAssets,
+			"thisFile":  filepath.Join(systemAssets, "script.ts"),
+			"firstDir":  systemAssets,
+			"firstFile": filepath.Join(systemAssets, "script.ts"),
+			"lastDir":   userAssets,
+			"lastFile":  filepath.Join(userAssets, "script.ts"),
+		}, actual)
+	})
+
 	t.Run("wrapped source dirs are searched", func(t *testing.T) {
 		root := t.TempDir()
 		system := filepath.Join(root, "system")
